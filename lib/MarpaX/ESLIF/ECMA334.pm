@@ -162,6 +162,7 @@ __DATA__
                                                    | <UNDERSCORE CHARACTER>
 <UNDERSCORE CHARACTER>                             ~ /\x{005F}/
                                                    | <A unicode escape sequence representing the character 005F>
+<A unicode escape sequence representing the character 005F> ~ '\\u' '0' '0' '5' 'f':i
 <IDENTIFIER PART CHARACTERS>                       ~ <IDENTIFIER PART CHARACTER>+
 <IDENTIFIER PART CHARACTER>                        ~ <LETTER CHARACTER>
                                                    | <DECIMAL DIGIT CHARACTER>
@@ -176,7 +177,7 @@ __DATA__
                                                    | <A unicode escape sequence representing a character of the class Nd>
 <CONNECTING CHARACTER>                             ~ /[\p{Pc}]/
                                                    | <A unicode escape sequence representing a character of the class Pc>
-<FOMATTING CHARACTER>                              ~ /[\p{Cf}]/
+<FORMATTING CHARACTER>                             ~ /[\p{Cf}]/
                                                    | <A unicode escape sequence representing a character of the class Cf>
 
 #
