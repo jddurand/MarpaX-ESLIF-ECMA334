@@ -75,14 +75,16 @@ __DATA__
 # 7.3.1 General
 # -------------
 
-<input>              ::= 
-<input>              ::= <input section>
+<input>              ::= <input section opt>
+<input section opt>  ::=
+<input section opt>  ::= <input section>
 
 <input section>      ::= <input section part>+
 
-<input section part> ::= <input elements> <new line>
-                       | <new line>
+<input section part> ::= <input elements opt> <new line>
                        | <pp directive>
+<input elements opt> ::=
+<input elements opt> ::= <input elements>
 
 <input elements>     ::= <input element>+
 
@@ -99,20 +101,21 @@ __DATA__
 # 7.3.3 Comments
 # --------------
 
-<comment>                   ::= <single line comment>
-                              | <delimited comment>
-<single line comment>       ::= '//'
-                              | '//' <input characters>
-<input characters>          ::= <input character>+
-<input character>           ::= /[^\x{000D}\x{000A}\x{000D}\x{000A}\x{085}\x{2028}\x{2029}]/u
-<delimited comment>         ::= '/*' <delimited comment text> <asterisks> '*/'
-                              | '/*'                          <asterisks> '*/'
-<delimited comment text>    ::= <delimited comment section>+
-<delimited comment section> ::= '/'
-                              | <asterisks> <not slash or asterisk>
-                              |             <not slash or asterisk>
-<asterisks>                 ::= /\*+/
-<not slash or asterisk>     ::= /[^\/*]/
+<comment>                    ::= <single line comment>
+                               | <delimited comment>
+<single line comment>        ::= '//' <input characters opt>
+<input characters>           ::= <input character>+
+<input character>            ::= /[^\x{000D}\x{000A}\x{000D}\x{000A}\x{085}\x{2028}\x{2029}]/u
+<delimited comment>          ::= '/*' <delimited comment text opt> <asterisks> '*/'
+<delimited comment text opt> ::=
+<delimited comment text opt> ::= <delimited comment text>
+<delimited comment text>     ::= <delimited comment section>+
+<delimited comment section>  ::= '/'
+                               | <asterisks opt> <not slash or asterisk>
+<asterisks opt>              ::=
+<asterisks opt>              ::= <asterisks>
+<asterisks>                  ::= /\*+/
+<not slash or asterisk>      ::= /[^\/*]/
 
 #
 # 7.3.4 White space
@@ -147,112 +150,116 @@ __DATA__
 # 7.4.3 Identifiers
 # -----------------
 
-<identifier>                 ::= <available identifier>
-                               | '@' <identifier or keyword>
-<available identifier>       ::= <An identifier or keyword that is not a keyword>
-<identifier or keyword>      ::= <identifier start character> <identifier part characters>
-                               | <identifier start character>
-<identifier start character> ::= <letter character>
-                               | <underscore character>
-<underscore character>       ::= /\x{005F}/
-                               | <A unicode escape sequence representing the character 005F>
-<identifier part characters> ::= <identifier part character>+
-<identifier part character>  ::= <letter character>
-                               | <decimal digit character>
-                               | <connecting character>
-                               | <combining character>
-                               | <formatting character>
-<letter character>           ::= /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/
-                               | <A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl>
-<combining character>        ::= /[\p{Mn}\p{Mc}]/
-                               | <A unicode escape sequence representing a character of classes Mn or Mc>
-<decimal digit character>    ::= /[\p{Nd}]/
-                               | <A unicode escape sequence representing a character of the class Nd>
-<connecting character>       ::= /[\p{Pc}]/
-                               | <A unicode escape sequence representing a character of the class Pc>
-<formatting character>       ::= /[\p{Cf}]/
-                               | <A unicode escape sequence representing a character of the class Cf>
+<identifier>                                     ::= <available identifier>
+                                                   | '@' <identifier or keyword>
+<available identifier>                           ::= <An identifier or keyword that is not a keyword>
+<An identifier or keyword that is not a keyword> ::= <IDENTIFIER OR KEYWORD> - <KEYWORD>
+<identifier or keyword>                          ::= <IDENTIFIER OR KEYWORD>
+
+<IDENTIFIER OR KEYWORD>                            ~ <IDENTIFIER START CHARACTER> <IDENTIFIER PART CHARACTERS>
+                                                   | <IDENTIFIER START CHARACTER>
+<IDENTIFIER START CHARACTER>                       ~ <LETTER CHARACTER>
+                                                   | <UNDERSCORE CHARACTER>
+<UNDERSCORE CHARACTER>                             ~ /\x{005F}/
+                                                   | <A unicode escape sequence representing the character 005F>
+<IDENTIFIER PART CHARACTERS>                       ~ <IDENTIFIER PART CHARACTER>+
+<IDENTIFIER PART CHARACTER>                        ~ <LETTER CHARACTER>
+                                                   | <DECIMAL DIGIT CHARACTER>
+                                                   | <CONNECTING CHARACTER>
+                                                   | <COMBINING CHARACTER>
+                                                   | <FORMATTING CHARACTER>
+<LETTER CHARACTER>                                 ~ /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/
+                                                   | <A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl>
+<COMBINING CHARACTER>                              ~ /[\p{Mn}\p{Mc}]/
+                                                   | <A unicode escape sequence representing a character of classes Mn or Mc>
+<DECIMAL DIGIT CHARACTER>                          ~ /[\p{Nd}]/
+                                                   | <A unicode escape sequence representing a character of the class Nd>
+<CONNECTING CHARACTER>                             ~ /[\p{Pc}]/
+                                                   | <A unicode escape sequence representing a character of the class Pc>
+<FOMATTING CHARACTER>                              ~ /[\p{Cf}]/
+                                                   | <A unicode escape sequence representing a character of the class Cf>
 
 #
 # 7.4.4 Keywords
 # --------------
-keyword ::= 'abstract'
-                       | 'as'
-                       | 'base'
-                       | 'bool'
-                       | 'break'
-                       | 'byte'
-                       | 'case'
-                       | 'catch'
-                       | 'char'
-                       | 'checked'
-                       | 'class'
-                       | 'const'
-                       | 'continue'
-                       | 'decimal'
-                       | 'default'
-                       | 'delegate'
-                       | 'do'
-                       | 'double'
-                       | 'else'
-                       | 'enum'
-                       | 'event'
-                       | 'explicit'
-                       | 'extern'
-                       | 'false'
-                       | 'finally'
-                       | 'fixed'
-                       | 'float'
-                       | 'for'
-                       | 'foreach'
-                       | 'goto'
-                       | 'if'
-                       | 'implicit'
-                       | 'in'
-                       | 'int'
-                       | 'interface'
-                       | 'internal'
-                       | 'is'
-                       | 'lock'
-                       | 'long'
-                       | 'namespace'
-                       | 'new'
-                       | 'null'
-                       | 'object'
-                       | 'operator'
-                       | 'out'
-                       | 'override'
-                       | 'params'
-                       | 'private'
-                       | 'protected'
-                       | 'public'
-                       | 'readonly'
-                       | 'ref'
-                       | 'return'
-                       | 'sbyte'
-                       | 'sealed'
-                       | 'short'
-                       | 'sizeof'
-                       | 'stackalloc'
-                       | 'static'
-                       | 'string'
-                       | 'struct'
-                       | 'switch'
-                       | 'this'
-                       | 'throw'
-                       | 'true'
-                       | 'try'
-                       | 'typeof'
-                       | 'uint'
-                       | 'ulong'
-                       | 'unchecked'
-                       | 'unsafe'
-                       | 'ushort'
-                       | 'using'
-                       | 'virtual'
-                       | 'void'
-                       | 'volatile'
-                       | 'while'
+keyword ::= <KEYWORD>
+<KEYWORD> ~ 'abstract'
+          | 'as'
+          | 'base'
+          | 'bool'
+          | 'break'
+          | 'byte'
+          | 'case'
+          | 'catch'
+          | 'char'
+          | 'checked'
+          | 'class'
+          | 'const'
+          | 'continue'
+          | 'decimal'
+          | 'default'
+          | 'delegate'
+          | 'do'
+          | 'double'
+          | 'else'
+          | 'enum'
+          | 'event'
+          | 'explicit'
+          | 'extern'
+          | 'false'
+          | 'finally'
+          | 'fixed'
+          | 'float'
+          | 'for'
+          | 'foreach'
+          | 'goto'
+          | 'if'
+          | 'implicit'
+          | 'in'
+          | 'int'
+          | 'interface'
+          | 'internal'
+          | 'is'
+          | 'lock'
+          | 'long'
+          | 'namespace'
+          | 'new'
+          | 'null'
+          | 'object'
+          | 'operator'
+          | 'out'
+          | 'override'
+          | 'params'
+          | 'private'
+          | 'protected'
+          | 'public'
+          | 'readonly'
+          | 'ref'
+          | 'return'
+          | 'sbyte'
+          | 'sealed'
+          | 'short'
+          | 'sizeof'
+          | 'stackalloc'
+          | 'static'
+          | 'string'
+          | 'struct'
+          | 'switch'
+          | 'this'
+          | 'throw'
+          | 'true'
+          | 'try'
+          | 'typeof'
+          | 'uint'
+          | 'ulong'
+          | 'unchecked'
+          | 'unsafe'
+          | 'ushort'
+          | 'using'
+          | 'virtual'
+          | 'void'
+          | 'volatile'
+          | 'while'
 <contextual keyword> ::= 'add'
                        | 'alias'
                        | 'ascending'
@@ -294,6 +301,8 @@ keyword ::= 'abstract'
 
 <boolean literal> ::= 'true'
                     | 'false'
+<TRUE OR FALSE>     ~ 'true'
+                    | 'false'
 
 # 7.4.5.3 Integer literals
 
@@ -307,7 +316,9 @@ keyword ::= 'abstract'
                                 | 'l':i
                                 | 'ul':i
                                 | 'lu':i
-<hexadecimal integer literal> ::= '0x':i <hex digits> <integer type suffix>opt
+<integer type suffix opt>     ::=
+<integer type suffix opt>     ::= <integer type suffix>
+<hexadecimal integer literal> ::= '0x':i <hex digits> <integer type suffix opt>
 <hex digits>                  ::= <hex digit>+
 <hex digit>                   ::= /[0-9A-Fa-f]/
 
@@ -318,7 +329,7 @@ keyword ::= 'abstract'
                          | <decimal digits> <exponent part> <real type suffix opt>
                          | <decimal digits> <real type suffix>
 <exponent part opt>    ::=
-<exponent part opt>    ::= exponent part opt
+<exponent part opt>    ::= <exponent part>
 <real type suffix opt> ::=
 <real type suffix opt> ::= <real type suffix>
 <exponent part>        ::= 'e':i <sign opt> <decimal digits>
@@ -447,7 +458,8 @@ keyword ::= 'abstract'
 # 7.5.2 Conditional compilation symbols
 # -------------------------------------
 
-<conditional symbol> ::= <Any identifier or keyword except true or false>
+<conditional symbol>                             ::= <Any identifier or keyword except true or false>
+<Any identifier or keyword except true or false> ::= <IDENTIFIER OR KEYWORD> - <TRUE OR FALSE>
 
 #
 # 7.5.3 Pre-processing expressions
@@ -484,6 +496,10 @@ keyword ::= 'abstract'
 # ----------------------------------------
 
 <pp conditional>          ::= <pp if section> <pp elif sections opt> <pp else section opt> <pp endif>
+<pp else section opt>     ::=
+<pp else section opt>     ::= <pp else section>
+<pp elif sections opt>    ::=
+<pp elif sections opt>    ::= <pp elif sections>
 <pp if section>           ::= <whitespace opt> '#' <whitespace opt> 'if' <whitespace>  <pp expression> <pp new line> <conditional section opt>
 <conditional section opt> ::=
 <conditional section opt> ::= <conditional section>
@@ -496,6 +512,8 @@ keyword ::= 'abstract'
 <skipped section>         ::= <skipped section part>+
 <skipped section part>    ::= <skipped characters opt> <new line>
                             | <pp directive>
+<skipped characters opt>  ::=
+<skipped characters opt>  ::= <skipped characters>
 <skipped characters>      ::= <whitespace opt> <not number sign> <input characters opt>
 <input characters opt>    ::=
 <input characters opt>    ::= <input characters>
