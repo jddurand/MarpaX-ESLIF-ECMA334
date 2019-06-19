@@ -478,3 +478,66 @@ keyword ::= 'abstract'
                    | <whitespace opt> '#' <whitespace opt> 'undef' <whitespace> <conditional symbol> <pp new line>
 <pp new line>    ::= <whitespace opt>                       <new line>
                    | <whitespace opt> <single line comment> <new line>
+
+#
+# 7.5.5 Conditional compilation directives
+# ----------------------------------------
+
+<pp conditional>          ::= <pp if section> <pp elif sections opt> <pp else section opt> <pp endif>
+<pp if section>           ::= <whitespace opt> '#' <whitespace opt> 'if' <whitespace>  <pp expression> <pp new line> <conditional section opt>
+<conditional section opt> ::=
+<conditional section opt> ::= <conditional section>
+<pp elif sections>        ::= <pp elif section>+
+<pp elif section>         ::= <whitespace opt> '#' <whitespace opt> 'elif' <whitespace> <pp expression> <pp new line> <conditional section opt>
+<pp else section>         ::= <whitespace opt> '#' <whitespace opt> 'else' <pp new line> <conditional section opt>
+<pp endif>                ::= <whitespace opt> '#' <whitespace opt> 'endif' <pp new line>
+<conditional section>     ::= <input section>
+                            | <skipped section>
+<skipped section>         ::= <skipped section part>+
+<skipped section part>    ::= <skipped characters opt> <new line>
+                            | <pp directive>
+<skipped characters>      ::= <whitespace opt> <not number sign> <input characters opt>
+<input characters opt>    ::=
+<input characters opt>    ::= <input characters>
+<not number sign>         ::= /[^#]/
+
+#
+# 7.5.6 Diagnostic directives
+# ---------------------------
+
+<pp diagnostic> ::= <whitespace opt> '#' <whitespace opt> 'error' <pp message>
+                  | <whitespace opt> '#' <whitespace opt> 'warning' <pp message>
+<pp message>    ::= <new line>
+                  | <whitespace> <input characters opt> <new line>
+
+
+#
+# 7.5.7 Region directives
+# -----------------------
+
+<pp region>       ::= <pp start region> <conditional section opt> <pp end region>
+<pp start region> ::= <whitespace opt> '#' <whitespace opt> 'region' <pp message>
+<pp end region>   ::= <whitespace opt> '#' <whitespace opt> 'endregion' <pp message>
+
+
+#
+# 7.5.8 Line directives
+# ---------------------
+
+<pp line>              ::= <whitespace opt> '#' <whitespace opt> 'line' <whitespace> <line indicator> <pp new line>
+<line indicator>       ::= <decimal digits> <whitespace> <file name>
+                         | <decimal digits>
+                         | 'default'
+                         | 'hidden'
+<file name>            ::= '"' <file name characters> '"'
+<file name characters> ::= <file name character>+
+<file name character>  ::= /[^\x{0022}\x{000D}\x{000A}\x{000D}\x{000A}\x{085}\x{2028}\x{2029}]/u
+
+#
+# 7.5.9 Pragma directives
+# -----------------------
+
+<pp pragma> ::= <whitespace opt> '#' <whitespace opt> 'pragma' <pp pragma text>
+<pp pragma text> ::= <new line>
+                   | <whitespace> <input characters opt> <new line>
+
