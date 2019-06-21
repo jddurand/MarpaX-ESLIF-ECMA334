@@ -88,9 +88,17 @@ __DATA__
 
 <input elements>     ::= <input element>+
 
-<input element>      ::= <whitespace>
-                       | <comment>
-                       | <token>
+#
+# ./.. only tokens are significant
+#
+# <input element>      ::= <whitespace>
+#                        | <comment>
+#                        | <token>
+
+:discard               ::= <whitespace>
+:discard               ::= <comment>
+<input element>        ::= <token>
+
 #
 # 7.3.2 Line terminators
 # ----------------------
@@ -118,6 +126,13 @@ __DATA__
 <not slash or asterisk>      ::= /[^\/*]/
 
 #
+# Comments are not processed within character and string literals
+#
+:terminal ::= "'"   pause => after event => :discard[switch]
+:terminal ::= '@"'  pause => after event => :discard[switch]
+:terminal ::= '"'   pause => after event => :discard[switch]
+
+#
 # 7.3.4 White space
 # -----------------
 <whitespace>           ::= <whitespace character>+
@@ -143,42 +158,46 @@ __DATA__
 # 7.4.2 Unicode character escape sequence
 # ---------------------------------------
 
-<unicode escape sequence> ::= '\\u' <hex digit> <hex digit> <hex digit> <hex digit>
-                            | '\\U' <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit>
+<unicode escape sequence> ::= <UNICODE ESCAPE SEQUENCE>
+
+<_HEX DIGIT>                ~ /[0-9A-Fa-f]/
+
+<UNICODE ESCAPE SEQUENCE>   ~ /\\u[0-9A-Fa-f]{4}/
+                            | /\\U[0-9A-Fa-f]{8}/
+
+# We want escape sequence to be reinterpreted into the real final character
+:lexeme ::= <UNICODE ESCAPE SEQUENCE> pause => before event => ^UNICODE_ESCAPE_SEQUENCE
 
 #
 # 7.4.3 Identifiers
 # -----------------
 
-<identifier>                                     ::= <available identifier>
-                                                   | '@' <identifier or keyword>
-<available identifier>                           ::= <An identifier or keyword that is not a keyword>
-<An identifier or keyword that is not a keyword> ::= <IDENTIFIER OR KEYWORD> - <KEYWORD>
-<identifier or keyword>                          ::= <IDENTIFIER OR KEYWORD>
+<identifier>                                              ::= <available identifier>
+                                                            | '@' <identifier or keyword>
+<available identifier>                                    ::= <An identifier or keyword that is not a keyword>
+<An identifier or keyword that is not a keyword>          ::= <IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
+<identifier or keyword>                                   ::= <IDENTIFIER OR KEYWORD>
 
-<IDENTIFIER OR KEYWORD>                            ~ <IDENTIFIER START CHARACTER> <IDENTIFIER PART CHARACTERS>
-                                                   | <IDENTIFIER START CHARACTER>
-<IDENTIFIER START CHARACTER>                       ~ <LETTER CHARACTER>
-                                                   | <UNDERSCORE CHARACTER>
-<UNDERSCORE CHARACTER>                             ~ /\x{005F}/
-                                                   | <A unicode escape sequence representing the character 005F>
-<A unicode escape sequence representing the character 005F> ~ '\\u' '0' '0' '5' 'f':i
-<IDENTIFIER PART CHARACTERS>                       ~ <IDENTIFIER PART CHARACTER>+
-<IDENTIFIER PART CHARACTER>                        ~ <LETTER CHARACTER>
-                                                   | <DECIMAL DIGIT CHARACTER>
-                                                   | <CONNECTING CHARACTER>
-                                                   | <COMBINING CHARACTER>
-                                                   | <FORMATTING CHARACTER>
-<LETTER CHARACTER>                                 ~ /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/
-                                                   | <A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl>
-<COMBINING CHARACTER>                              ~ /[\p{Mn}\p{Mc}]/
-                                                   | <A unicode escape sequence representing a character of classes Mn or Mc>
-<DECIMAL DIGIT CHARACTER>                          ~ /[\p{Nd}]/
-                                                   | <A unicode escape sequence representing a character of the class Nd>
-<CONNECTING CHARACTER>                             ~ /[\p{Pc}]/
-                                                   | <A unicode escape sequence representing a character of the class Pc>
-<FORMATTING CHARACTER>                             ~ /[\p{Cf}]/
-                                                   | <A unicode escape sequence representing a character of the class Cf>
+# We will manage that in userspace instead of using a grammar exception
+<IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>               ~ /[\s\S]/          # This always matches one byte
+:lexeme ::= <IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD> pause => before event => ^IDENTIFIER_OR_KEYWORD_THAT_IS_NOT_A_KEYWORD
+
+<IDENTIFIER OR KEYWORD>                                     ~ <IDENTIFIER START CHARACTER> <IDENTIFIER PART CHARACTERS>
+                                                            | <IDENTIFIER START CHARACTER>
+<IDENTIFIER START CHARACTER>                                ~ <LETTER CHARACTER>
+                                                            | <UNDERSCORE CHARACTER>
+<UNDERSCORE CHARACTER>                                      ~ /\x{005F}/
+<IDENTIFIER PART CHARACTERS>                                ~ <IDENTIFIER PART CHARACTER>+
+<IDENTIFIER PART CHARACTER>                                 ~ <LETTER CHARACTER>
+                                                            | <DECIMAL DIGIT CHARACTER>
+                                                            | <CONNECTING CHARACTER>
+                                                            | <COMBINING CHARACTER>
+                                                            | <FORMATTING CHARACTER>
+<LETTER CHARACTER>                                          ~ /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/
+<COMBINING CHARACTER>                                       ~ /[\p{Mn}\p{Mc}]/
+<DECIMAL DIGIT CHARACTER>                                   ~ /[\p{Nd}]/
+<CONNECTING CHARACTER>                                      ~ /[\p{Pc}]/
+<FORMATTING CHARACTER>                                      ~ /[\p{Cf}]/
 
 #
 # 7.4.4 Keywords
@@ -460,7 +479,11 @@ keyword ::= <KEYWORD>
 # -------------------------------------
 
 <conditional symbol>                             ::= <Any identifier or keyword except true or false>
-<Any identifier or keyword except true or false> ::= <IDENTIFIER OR KEYWORD> - <TRUE OR FALSE>
+<Any identifier or keyword except true or false> ::= <IDENTIFIER OR KEYWORD THAT IS NOT TRUE OR FALSE>
+
+# We will manage that in userspace instead of using a grammar exception
+<IDENTIFIER OR KEYWORD THAT IS NOT TRUE OR FALSE>               ~ /[\s\S]/          # This always matches one byte
+:lexeme ::= <IDENTIFIER OR KEYWORD THAT IS NOT TRUE OR FALSE> pause => before event => ^IDENTIFIER_OR_KEYWORD_THAT_IS_NOT_TRUE_OR_FALSE
 
 #
 # 7.5.3 Pre-processing expressions
