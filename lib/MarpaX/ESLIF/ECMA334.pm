@@ -7,6 +7,24 @@ use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334;
 
+use Log::Any qw/$log/;
+use Log::Log4perl qw/:easy/;
+use Log::Any::Adapter;
+use Log::Any::Adapter::Log4perl;  # Just to make sure dzil catches it
+
+#
+# Init log
+#
+our $defaultLog4perlConf = '
+log4perl.rootLogger              = DEBUG, Screen
+log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
+log4perl.appender.Screen.stderr  = 0
+log4perl.appender.Screen.layout  = PatternLayout
+log4perl.appender.Screen.layout.ConversionPattern = %d %-5p %6P %m{chomp}%n
+';
+Log::Log4perl::init(\$defaultLog4perlConf);
+Log::Any::Adapter->set('Log4perl');
+
 # ABSTRACT: C# as per Standard ECMA-334 5th Edition
 
 # VERSION
@@ -28,54 +46,184 @@ This module parses C# language as per Standard ECMA-334 5th Edition.
 =cut
 
 use Carp qw/croak/;
-use MarpaX::ESLIF 3.0.12;
+use Data::Section -setup;
 use Log::Any qw/$log/;
+use MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface;
+use MarpaX::ESLIF::ECMA334::Lexical::ValueInterface;
+use MarpaX::ESLIF 3.0.12;
 
-BEGIN {
-    # FOR TEST
-    use Log::Log4perl qw/:easy/;
-    use Log::Any::Adapter;
-    use Log::Any::Adapter::Log4perl;  # Just to make sure dzil catches it
-    #
-    # Init log
-    #
-    our $defaultLog4perlConf = '
-log4perl.rootLogger              = INFO, Screen
-log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
-log4perl.appender.Screen.stderr  = 0
-log4perl.appender.Screen.layout  = PatternLayout
-log4perl.appender.Screen.layout.ConversionPattern = %d %-5p %6P %m{chomp}%n
-';
-    Log::Log4perl::init(\$defaultLog4perlConf);
-    Log::Any::Adapter->set('Log4perl');
-}
+my $LEXICAL_BNF = ${__PACKAGE__->section_data('lexical')};
+my $SYNTACTIC_BNF = ${__PACKAGE__->section_data('syntactic')};
 
-my $_BNF    = do { local $/; <DATA> };
+my $LEXICAL_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $LEXICAL_BNF);
+my $SYNTACTIC_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $SYNTACTIC_BNF);
+
+# Sub-lexical grammars
+my $IDENTIFIER_OR_KEYWORD_BNF = $LEXICAL_BNF; $IDENTIFIER_OR_KEYWORD_BNF .= "\n:start ::= <identifier or keyword>\n";
+my $IDENTIFIER_OR_KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $IDENTIFIER_OR_KEYWORD_BNF);
+
+my $KEYWORD_BNF = $LEXICAL_BNF; $KEYWORD_BNF .= "\n:start ::= <keyword>\n";
+my $KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $KEYWORD_BNF);
+
+my $UNICODE_ESCAPE_SEQUENCE_BNF = $LEXICAL_BNF; $KEYWORD_BNF .= "\n:start ::= <unicode escape sequence>\n";
+my $UNICODE_ESCAPE_SEQUENCE_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $UNICODE_ESCAPE_SEQUENCE_BNF);
 
 sub new {
     my ($pkg, %options) = @_;
 
-    my $bnf = $_BNF;
-
     return bless {
-        grammar => MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $bnf),
-        %options
+        grammars => {
+            lexical => $LEXICAL_GRAMMAR,
+            syntactic => $SYNTACTIC_GRAMMAR,
+            identifier_or_keyword => $IDENTIFIER_OR_KEYWORD_GRAMMAR,
+            keyword => $KEYWORD_GRAMMAR,
+            unicode_escape_sequence => $UNICODE_ESCAPE_SEQUENCE_GRAMMAR
+        },
+        options => \%options
     }, $pkg
+}
+
+sub lexical_parse {
+    my ($self, $input, $eslifRecognizer) = @_;
+
+    return $self->_parse($input,
+                         'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
+                         'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
+                         $eslifRecognizer);
+}
+
+sub _parse {
+    my ($self, $input, $recognizerInterfaceClass, $valueInterfaceClass, $eslifRecognizer) = @_;
+
+    if (! defined($eslifRecognizer)) {
+        my $recognizerInterface = $recognizerInterfaceClass->new(options => $self->{options}, input => $input);
+        $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($self->{grammars}->{lexical}, $recognizerInterface);
+    }
+
+    # -----------------------------
+    # Instanciate a value interface
+    # -----------------------------
+    my $valueInterface = $valueInterfaceClass->new();
+
+    $eslifRecognizer->scan(1) || croak "scan() failed";   # 1 for initial events, eventually
+    $self->_event_manager($recognizerInterfaceClass, $valueInterfaceClass, $eslifRecognizer);
+    if ($eslifRecognizer->isCanContinue) {
+        do {
+            $eslifRecognizer->resume || croak 'resume() failed';
+            $self->_event_manager($recognizerInterfaceClass, $valueInterfaceClass, $eslifRecognizer)
+        } while ($eslifRecognizer->isCanContinue)
+    }
+    #
+    # We configured value interface to not accept ambiguity not null parse.
+    # So no need to loop on value()
+    #
+    MarpaX::ESLIF::Value->new($eslifRecognizer, $valueInterface)->value() || croak 'Valuation failed';
+
+    # ------------------------
+    # Return the value
+    # ------------------------
+    return $valueInterface->getResult
+}
+
+sub sub_lexical_parse {
+    my ($self, $recognizerInterfaceClass, $grammar_name, $eslifRecognizer) = @_;
+    #
+    # Prepare a $grammar_name recognizer that shares its source with $eslifRecognizer
+    #
+    my $nextRecognizerInterface = $recognizerInterfaceClass->new(options => $self->{options});
+    my $nextEslifRecognizer = MarpaX::ESLIF::Recognizer->new($self->{grammars}->{$grammar_name}, $nextRecognizerInterface);
+    $nextEslifRecognizer->share($eslifRecognizer);
+    
+    return $self->lexical_parse(undef, $nextEslifRecognizer);
+}
+
+sub _event_manager {
+    my ($self, $recognizerInterfaceClass, $valueInterfaceClass, $eslifRecognizer) = @_;
+
+    my $events = $eslifRecognizer->events();
+    my $lexemeExpected = $eslifRecognizer->lexemeExpected();
+    $log->debugf('Events: %s', $events);
+    $log->debugf('Expected: %s', $lexemeExpected);
+    my $haveLexeme = 0;
+
+    foreach (@{$events}) {
+        my $event = $_->{event};
+        next unless $event;  # Can be undef for exhaustion
+        my $match;
+
+        if ($event eq '^An_identifier_or_keyword_that_is_not_a_keyword') {
+            my $identifier_or_keyword = $self->sub_lexical_parse($recognizerInterfaceClass, 'identifier_or_keyword', $eslifRecognizer);
+            my $keyword = $self->sub_lexical_parse($recognizerInterfaceClass, 'keyword', $eslifRecognizer);
+
+            $match = $identifier_or_keyword if (defined($identifier_or_keyword) && ! defined($keyword));
+
+            $eslifRecognizer->lexemeAlternative('AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD', $match) if defined($match);
+        }
+        elsif ($event eq '^A_unicode_escape_sequence_representing_the_character_005f') {
+            my $unicode_escape_sequence = $self->sub_lexical_parse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer);
+
+            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence eq "\x005f");
+
+            $eslifRecognizer->lexemeAlternative('A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F', $match) if defined($match);
+        }
+        elsif ($event eq '^A_unicode_escape_sequence_representing_a_character_of_classes_Lu_Ll_Lt_Lm_Lo_or_Nl') {
+            my $unicode_escape_sequence = $self->sub_lexical_parse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer);
+
+            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]$/);
+
+            $eslifRecognizer->lexemeAlternative('A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES LU LL LT LM LO OR NL', $match) if defined($match);
+        }
+        elsif ($event eq '^A_unicode_escape_sequence_representing_a_character_of_classes_Mn_or_Mc') {
+            my $unicode_escape_sequence = $self->sub_lexical_parse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer);
+
+            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Mn}\p{Mc}]$/);
+
+            $eslifRecognizer->lexemeAlternative('A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES MN OR MC', $match) if defined($match);
+        }
+        elsif ($event eq '^A_unicode_escape_sequence_representing_a_character_of_the_class_Nd') {
+            my $unicode_escape_sequence = $self->sub_lexical_parse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer);
+
+            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Nd}]$/);
+
+            $eslifRecognizer->lexemeAlternative('A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS ND', $match) if defined($match);
+        }
+        elsif ($event eq '^A_unicode_escape_sequence_representing_a_character_of_the_class_Pc') {
+            my $unicode_escape_sequence = $self->sub_lexical_parse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer);
+
+            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Pc}]$/);
+
+            $eslifRecognizer->lexemeAlternative('A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS PC', $match) if defined($match);
+        }
+        elsif ($event eq '^A_unicode_escape_sequence_representing_a_character_of_the_class_Cf') {
+            my $unicode_escape_sequence = $self->sub_lexical_parse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer);
+
+            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Cf}]$/);
+
+            $eslifRecognizer->lexemeAlternative('A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS CF', $match) if defined($match);
+        } else {
+            croak "$event unmanaged";
+        }
+
+        ++$haveLexeme if defined($match);
+    }
+
+    croak 'No Lexeme' unless $haveLexeme;
+    $eslifRecognizer->lexemeComplete(1);
 }
 
 1;
 
 __DATA__
+__[ lexical ]__
 #
 # 7.3 Lexical analysis
 # ====================
-#
 
 #
 # 7.3.1 General
 # -------------
 
-<input>              ::= <input section opt>
+<input>              ::= <input section opt>                                               # This is the default :start
 <input section opt>  ::=
 <input section opt>  ::= <input section>
 
@@ -88,16 +236,9 @@ __DATA__
 
 <input elements>     ::= <input element>+
 
-#
-# ./.. only tokens are significant
-#
-# <input element>      ::= <whitespace>
-#                        | <comment>
-#                        | <token>
-
-:discard               ::= <whitespace>
-:discard               ::= <comment>
-<input element>        ::= <token>
+<input element>      ::= <whitespace>
+                       | <comment>
+                       | <token>
 
 #
 # 7.3.2 Line terminators
@@ -126,13 +267,6 @@ __DATA__
 <not slash or asterisk>      ::= /[^\/*]/
 
 #
-# Comments are not processed within character and string literals
-#
-:terminal ::= "'"   pause => after event => :discard[switch]
-:terminal ::= '@"'  pause => after event => :discard[switch]
-:terminal ::= '"'   pause => after event => :discard[switch]
-
-#
 # 7.3.4 White space
 # -----------------
 <whitespace>           ::= <whitespace character>+
@@ -158,15 +292,8 @@ __DATA__
 # 7.4.2 Unicode character escape sequence
 # ---------------------------------------
 
-<unicode escape sequence> ::= <UNICODE ESCAPE SEQUENCE>
-
-<_HEX DIGIT>                ~ /[0-9A-Fa-f]/
-
-<UNICODE ESCAPE SEQUENCE>   ~ /\\u[0-9A-Fa-f]{4}/
-                            | /\\U[0-9A-Fa-f]{8}/
-
-# We want escape sequence to be reinterpreted into the real final character
-:lexeme ::= <UNICODE ESCAPE SEQUENCE> pause => before event => ^UNICODE_ESCAPE_SEQUENCE
+<unicode escape sequence> ::= '\\u' <hex digit> <hex digit> <hex digit> <hex digit>                                                 action => u4
+                            | '\\U' <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> action => u8
 
 #
 # 7.4.3 Identifiers
@@ -175,35 +302,34 @@ __DATA__
 <identifier>                                              ::= <available identifier>
                                                             | '@' <identifier or keyword>
 <available identifier>                                    ::= <An identifier or keyword that is not a keyword>
-<An identifier or keyword that is not a keyword>          ::= <IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
-<identifier or keyword>                                   ::= <IDENTIFIER OR KEYWORD>
 
-# We will manage that in userspace instead of using a grammar exception
-<IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>               ~ /[\s\S]/          # This always matches one byte
-:lexeme ::= <IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD> pause => before event => ^IDENTIFIER_OR_KEYWORD_THAT_IS_NOT_A_KEYWORD
-
-<IDENTIFIER OR KEYWORD>                                     ~ <IDENTIFIER START CHARACTER> <IDENTIFIER PART CHARACTERS>
-                                                            | <IDENTIFIER START CHARACTER>
-<IDENTIFIER START CHARACTER>                                ~ <LETTER CHARACTER>
-                                                            | <UNDERSCORE CHARACTER>
-<UNDERSCORE CHARACTER>                                      ~ /\x{005F}/
-<IDENTIFIER PART CHARACTERS>                                ~ <IDENTIFIER PART CHARACTER>+
-<IDENTIFIER PART CHARACTER>                                 ~ <LETTER CHARACTER>
-                                                            | <DECIMAL DIGIT CHARACTER>
-                                                            | <CONNECTING CHARACTER>
-                                                            | <COMBINING CHARACTER>
-                                                            | <FORMATTING CHARACTER>
-<LETTER CHARACTER>                                          ~ /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/
-<COMBINING CHARACTER>                                       ~ /[\p{Mn}\p{Mc}]/
-<DECIMAL DIGIT CHARACTER>                                   ~ /[\p{Nd}]/
-<CONNECTING CHARACTER>                                      ~ /[\p{Pc}]/
-<FORMATTING CHARACTER>                                      ~ /[\p{Cf}]/
+<identifier or keyword>                                   ::= <identifier start character> <identifier part characters>
+                                                            | <identifier start character>
+<identifier start character>                              ::= <letter character>
+                                                            | <underscore character>
+<underscore character>                                    ::= '_'
+                                                            | <A unicode escape sequence representing the character 005f>
+<identifier part characters>                              ::= <identifier part character>+
+<identifier part character>                               ::= <letter character>
+                                                            | <decimal digit character>
+                                                            | <connecting character>
+                                                            | <combining character>
+                                                            | <formatting character>
+<letter character>                                        ::= /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/
+                                                            | <A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl>
+<combining character>                                     ::= /[\p{Mn}\p{Mc}]/
+                                                            | <A unicode escape sequence representing a character of classes Mn or Mc>
+<decimal digit character>                                 ::= /[\p{Nd}]/
+                                                            | <A unicode escape sequence representing a character of the class Nd>
+<connecting character>                                    ::= /[\p{Pc}]/
+                                                            | <A unicode escape sequence representing a character of the class Pc>
+<formatting character>                                    ::= /[\p{Cf}]/
+                                                            | <A unicode escape sequence representing a character of the class Cf>
 
 #
 # 7.4.4 Keywords
 # --------------
-keyword ::= <KEYWORD>
-<KEYWORD> ~ 'abstract'
+keyword ::= 'abstract'
           | 'as'
           | 'base'
           | 'bool'
@@ -320,8 +446,6 @@ keyword ::= <KEYWORD>
 # 7.4.5.2 Boolean literals
 
 <boolean literal> ::= 'true'
-                    | 'false'
-<TRUE OR FALSE>     ~ 'true'
                     | 'false'
 
 # 7.4.5.3 Integer literals
@@ -479,11 +603,6 @@ keyword ::= <KEYWORD>
 # -------------------------------------
 
 <conditional symbol>                             ::= <Any identifier or keyword except true or false>
-<Any identifier or keyword except true or false> ::= <IDENTIFIER OR KEYWORD THAT IS NOT TRUE OR FALSE>
-
-# We will manage that in userspace instead of using a grammar exception
-<IDENTIFIER OR KEYWORD THAT IS NOT TRUE OR FALSE>               ~ /[\s\S]/          # This always matches one byte
-:lexeme ::= <IDENTIFIER OR KEYWORD THAT IS NOT TRUE OR FALSE> pause => before event => ^IDENTIFIER_OR_KEYWORD_THAT_IS_NOT_TRUE_OR_FALSE
 
 #
 # 7.5.3 Pre-processing expressions
@@ -583,3 +702,36 @@ keyword ::= <KEYWORD>
 <pp pragma text> ::= <new line>
                    | <whitespace> <input characters opt> <new line>
 
+#
+# Lexemes
+#
+<An identifier or keyword that is not a keyword>                                     ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
+<A unicode escape sequence representing the character 005f>                          ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>
+<A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl> ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES LU LL LT LM LO OR NL>
+<A unicode escape sequence representing a character of classes Mn or Mc>             ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES MN OR MC>
+<A unicode escape sequence representing a character of the class Nd>                 ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS ND>
+<A unicode escape sequence representing a character of the class Pc>                 ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS PC>
+<A unicode escape sequence representing a character of the class Cf>                 ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS CF>
+<Any identifier or keyword except true or false>                                     ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
+
+<AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>                                     ~ [^\s\S]     # Matches nothing
+<A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>                          ~ [^\s\S]     # Matches nothing
+<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES LU LL LT LM LO OR NL> ~ [^\s\S]     # Matches nothing
+<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES MN OR MC>             ~ [^\s\S]     # Matches nothing
+<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS ND>                 ~ [^\s\S]     # Matches nothing
+<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS PC>                 ~ [^\s\S]     # Matches nothing
+<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS CF>                 ~ [^\s\S]     # Matches nothing
+<ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>                                     ~ [^\s\S]     # Matches nothing
+
+
+event ^An_identifier_or_keyword_that_is_not_a_keyword                                     = predicted <An identifier or keyword that is not a keyword>
+event ^A_unicode_escape_sequence_representing_the_character_005f                          = predicted <A unicode escape sequence representing the character 005f>
+event ^A_unicode_escape_sequence_representing_a_character_of_classes_Lu_Ll_Lt_Lm_Lo_or_Nl = predicted <A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl>
+event ^A_unicode_escape_sequence_representing_a_character_of_classes_Mn_or_Mc             = predicted <A unicode escape sequence representing a character of classes Mn or Mc>
+event ^A_unicode_escape_sequence_representing_a_character_of_the_class_Nd                 = predicted <A unicode escape sequence representing a character of the class Nd>
+event ^A_unicode_escape_sequence_representing_a_character_of_the_class_Pc                 = predicted <A unicode escape sequence representing a character of the class Pc>
+event ^A_unicode_escape_sequence_representing_a_character_of_the_class_Cf                 = predicted <A unicode escape sequence representing a character of the class Cf>
+event ^Any_identifier_or_keyword_except_true_or_false                                     = predicted <Any identifier or keyword except true or false>
+
+__[ syntactic ]__
+todo ::= 'TO DO'
