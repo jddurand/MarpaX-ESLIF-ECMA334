@@ -49,7 +49,7 @@ foreach (sort __PACKAGE__->section_data_names) {
 sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
-    my @r = $ecma334->lexical_parse($input, $encoding);
+    my @r = $ecma334->lexicalParse($input, $encoding);
 
     ok($want_ok ? scalar(@r) : !scalar(@r), $name);
 }
@@ -61,4 +61,19 @@ done_testing();
 
 __DATA__
 __[ ok / test ]__
-namespace test1; class test2 {}
+// A Hello World! program in C#.
+using System;
+namespace HelloWorld
+{
+    class Hello 
+    {
+        static void Main() 
+        {
+            Console.WriteLine("Hello World!");
+
+            // Keep the console window open in debug mode.
+            Console.WriteLine("Press any key to exit.");
+            Console.ReadKey();
+        }
+    }
+}

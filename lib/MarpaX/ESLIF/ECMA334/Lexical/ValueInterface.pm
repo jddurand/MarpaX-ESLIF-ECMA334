@@ -69,7 +69,7 @@ Returns a true or a false value, indicating if valuation should allow ambiguous 
 
 =cut
 
-sub isWithAmbiguous    { return 0 }  # Allow ambiguous parse ?
+sub isWithAmbiguous    { return 1 }  # Allow ambiguous parse ?
 
 =head3 isWithNull
 
@@ -161,6 +161,14 @@ sub u8 {
     }
 
     return $result
+}
+
+sub my_action {
+    my ($self, @args) = @_;
+
+    my $key = $MarpaX::ESLIF::Context::ruleName // $MarpaX::ESLIF::Context::symbolName;
+
+    return { $key => \@args }
 }
 
 =head1 SEE ALSO
