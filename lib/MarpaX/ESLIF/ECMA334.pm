@@ -80,7 +80,10 @@ sub new {
             syntactic => $SYNTACTIC_GRAMMAR,
             identifier_or_keyword => $IDENTIFIER_OR_KEYWORD_GRAMMAR,
             keyword => $KEYWORD_GRAMMAR,
-            unicode_escape_sequence => $UNICODE_ESCAPE_SEQUENCE_GRAMMAR
+            unicode_escape_sequence => $UNICODE_ESCAPE_SEQUENCE_GRAMMAR,
+            can_comment => 1,                     # At start it is true
+            can_single_line_comment => 1,         # At start it is true
+            can_delimited_comment => 1            # At start it is true
         },
         options => \%options
     }, $pkg
@@ -124,15 +127,31 @@ sub _parse {
     # We configured value interface to not accept ambiguity not null parse.
     # So no need to loop on value()
     #
+    my $value = MarpaX::ESLIF::Value->new($eslifRecognizer, $valueInterface);
+
+    my $nresult = 0;
     my $rc;
-    while (MarpaX::ESLIF::Value->new($eslifRecognizer, $valueInterface)->value()) {
-        $rc = $valueInterface->getResult;
+    while ($value->value()) {
+        ++$nresult;
+        my $rc2 = $valueInterface->getResult;
         $log->noticef('Result:');
         use Data::Dumper;
-        print Dumper($rc);
+        print Dumper($rc2);
+        use Test::Deep::NoTest qw/cmp_details deep_diag/;
+        if (defined($rc) && defined($rc2)) {
+            my ($ok, $stack) = cmp_details($rc, $rc2);
+            if ($ok) {
+                print "OK\n";
+            } else {
+                print "KO\n";
+                print deep_diag($stack);
+                exit;
+            }
+        }
+        $rc = $rc2;
     }
+    croak "There are $nresult results";
     croak 'No result' unless defined($rc);
-    # MarpaX::ESLIF::Value->new($eslifRecognizer, $valueInterface)->value() || croak 'Valuation failed';
 
     # ------------------------
     # Return the value
@@ -205,8 +224,23 @@ sub _lexicalEventManager {
             my $unicode_escape_sequence = $self->_subLexicalParse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer, $recurseLevel);
             $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Cf}]$/);
         }
+        elsif ($lexeme eq 'CAN_COMMENT') {
+            if ($self->{can_comment}) {
+                $eslifRecognizer->lexemeRead($lexeme, undef, 0);
+            }
+        }
+        elsif ($lexeme eq 'CAN_SINGLE_LINE_COMMENT') {
+            if ($self->{can_single_line_comment}) {
+                $eslifRecognizer->lexemeRead($lexeme, undef, 0);
+            }
+        }
+        elsif ($lexeme eq 'CAN_DELIMITED_COMMENT') {
+            if ($self->{can_delimited_comment}) {
+                $eslifRecognizer->lexemeRead($lexeme, undef, 0);
+            }
+        }
         else {
-            croak("Unsuppose sub lexeme $lexeme");
+            croak("Unsupported sub lexeme $lexeme");
         }
 
         if (defined($match)) {
@@ -265,21 +299,35 @@ __[ lexical ]__
 # 7.3.3 Comments
 # --------------
 
-<comment>                    ::= <single line comment>                              name => 'comment (1)'
-                               | <delimited comment>                                name => 'comment (2)'
-<single line comment>        ::= '//' <input characters opt>                        name => 'single line comment'
-<input characters>           ::= <input character>+                                 name => 'input characters'
-<input character>            ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u     name => 'input character'
-<delimited comment>          ::= '/*' <delimited comment text opt> <asterisks> '*/' name => 'delimited comment'
-<delimited comment text opt> ::=                                                    name => 'delimited comment text opt (nulled)'
-<delimited comment text opt> ::= <delimited comment text>                           name => 'delimited comment text opt'
-<delimited comment text>     ::= <delimited comment section>+                       name => 'delimited comment text'
-<delimited comment section>  ::= '/'                                                name => 'delimited comment section (1)'
-                               | <asterisks opt> <not slash or asterisk>            name => 'delimited comment section (2)'
-<asterisks opt>              ::=                                                    name => 'asterisks opt (nulled)'
-<asterisks opt>              ::= <asterisks>                                        name => 'asterisks opt'
-<asterisks>                  ::= /\*+/                                              name => 'asterisks'
-<not slash or asterisk>      ::= /[^\/*]/                                           name => 'not slash or asterisk'
+#
+# Notes:
+#
+# 1. Comments do not nest. The character sequences '/*' and '*/' have no special meaning within a <single line comment>,
+#    and the character sequences '//' and '/*' have no special meaning within a <delimited comment>.
+#    => This is why we introduce the fake lexemes CAN_SINGLE_LINE_COMMENT and CAN_DELIMITED_COMMENT.
+#
+# 2. Comments are not processed within character and string literals.
+#    => The fake lexemes CAN_COMMENT is used.
+#
+
+CAN_COMMENT                    ~ [^\s\S] # Matches nothing
+CAN_SINGLE_LINE_COMMENT        ~ [^\s\S] # Matches nothing
+CAN_DELIMITED_COMMENT          ~ [^\s\S] # Matches nothing
+<comment>                    ::= CAN_COMMENT <single line comment>                                        name => 'comment (1)'
+                               | CAN_COMMENT <delimited comment>                                          name => 'comment (2)'
+<single line comment>        ::= CAN_SINGLE_LINE_COMMENT '//' <input characters opt>                      name => 'single line comment'
+<input characters>           ::= <input character>+                                                       name => 'input characters'
+<input character>            ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u                           name => 'input character'
+<delimited comment>          ::= CAN_DELIMITED_COMMENT '/*' <delimited comment text opt> <asterisks> '*/' name => 'delimited comment'
+<delimited comment text opt> ::=                                                                          name => 'delimited comment text opt (nulled)'
+<delimited comment text opt> ::= <delimited comment text>                                                 name => 'delimited comment text opt'
+<delimited comment text>     ::= <delimited comment section>+                                             name => 'delimited comment text'
+<delimited comment section>  ::= '/'                                                                      name => 'delimited comment section (1)'
+                               | <asterisks opt> <not slash or asterisk>                                  name => 'delimited comment section (2)'
+<asterisks opt>              ::=                                                                          name => 'asterisks opt (nulled)'
+<asterisks opt>              ::= <asterisks>                                                              name => 'asterisks opt'
+<asterisks>                  ::= /\*+/                                                                    name => 'asterisks'
+<not slash or asterisk>      ::= /[^\/*]/                                                                 name => 'not slash or asterisk'
 
 #
 # 7.3.4 White space
