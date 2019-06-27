@@ -69,7 +69,7 @@ Returns a true or a false value, indicating if valuation should allow ambiguous 
 
 =cut
 
-sub isWithAmbiguous    { return 1 }  # Allow ambiguous parse ?
+sub isWithAmbiguous    { return 0 }  # Allow ambiguous parse ?
 
 =head3 isWithNull
 

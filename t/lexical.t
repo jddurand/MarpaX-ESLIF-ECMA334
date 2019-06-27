@@ -32,7 +32,7 @@ isa_ok($ecma334, 'MarpaX::ESLIF::ECMA334');
 diag("###########################################################");
 diag("Inline data");
 diag("###########################################################");
-foreach (sort __PACKAGE__->section_data_names) {
+foreach (__PACKAGE__->section_data_names) {
     my $want_ok = ($_ =~ /^ok/);
     my $want_ko = ($_ =~ /^ko/);
     #

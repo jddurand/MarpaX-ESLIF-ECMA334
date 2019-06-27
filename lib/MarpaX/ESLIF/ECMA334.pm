@@ -128,30 +128,32 @@ sub _parse {
     # So no need to loop on value()
     #
     my $value = MarpaX::ESLIF::Value->new($eslifRecognizer, $valueInterface);
+    my $rc = $value->value();
 
-    my $nresult = 0;
-    my $rc;
-    while ($value->value()) {
-        ++$nresult;
-        my $rc2 = $valueInterface->getResult;
-        $log->noticef('Result:');
-        use Data::Dumper;
-        print Dumper($rc2);
-        use Test::Deep::NoTest qw/cmp_details deep_diag/;
-        if (defined($rc) && defined($rc2)) {
-            my ($ok, $stack) = cmp_details($rc, $rc2);
-            if ($ok) {
-                print "OK\n";
-            } else {
-                print "KO\n";
-                print deep_diag($stack);
-                exit;
+    if (0) { # For tests
+        my $nresult = 0;
+        while ($value->value()) {
+            ++$nresult;
+            my $rc2 = $valueInterface->getResult;
+            $log->noticef('Result:');
+            use Data::Dumper;
+            print Dumper($rc2);
+            use Test::Deep::NoTest qw/cmp_details deep_diag/;
+            if (defined($rc) && defined($rc2)) {
+                my ($ok, $stack) = cmp_details($rc, $rc2);
+                if ($ok) {
+                    print "OK\n";
+                } else {
+                    print "KO\n";
+                    print deep_diag($stack);
+                    exit;
+                }
             }
+            $rc = $rc2;
         }
-        $rc = $rc2;
+        croak "There are $nresult results";
+        croak 'No result' unless defined($rc);
     }
-    croak "There are $nresult results";
-    croak 'No result' unless defined($rc);
 
     # ------------------------
     # Return the value
