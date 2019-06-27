@@ -67,7 +67,7 @@ namespace HelloWorld
 {
 }
 __[ ok / delimited comment 1 ]__
-/* A Hello World! program in C#. */
+/* A Hello World! program in C#. ****x//*/
 using System;
 namespace HelloWorld
 {

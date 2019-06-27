@@ -299,8 +299,8 @@ __[ lexical ]__
 <single line comment>        ::= '//' <input characters opt>                                              name => 'single line comment'
 # <input characters>           ::= <input character>+                                                       name => 'input characters'
 # <input character>            ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u                           name => 'input character'
-<input characters>           ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]+/u                          name => 'input characters'
-<delimited comment>          ::= '/*' <delimited comment text opt> <asterisks> '*/'                       name => 'delimited comment'
+<input characters>           ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]+/u                          name => 'input characters'   # Eat as much as possible in one go
+<delimited comment>          ::= '/*' <delimited comment text opt> <asterisks> '/'                        name => 'delimited comment'
 <delimited comment text opt> ::=                                                                          name => 'delimited comment text opt (nulled)'
 <delimited comment text opt> ::= <delimited comment text>                                                 name => 'delimited comment text opt'
 <delimited comment text>     ::= <delimited comment section>+                                             name => 'delimited comment text'
@@ -308,7 +308,7 @@ __[ lexical ]__
                                | <asterisks opt> <not slash or asterisk>                                  name => 'delimited comment section (2)'
 <asterisks opt>              ::=                                                                          name => 'asterisks opt (nulled)'
 <asterisks opt>              ::= <asterisks>                                                              name => 'asterisks opt'
-<asterisks>                  ::= '*'+                                                                     name => 'asterisks'
+<asterisks>                  ::= /\*+/                                                                    name => 'asterisks'          # Eat as much as possible askterisks in one go
 <not slash or asterisk>      ::= /[^\/*]/                                                                 name => 'not slash or asterisk'
 
 #
