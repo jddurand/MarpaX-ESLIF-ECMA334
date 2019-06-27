@@ -60,8 +60,14 @@ sub do_test {
 done_testing();
 
 __DATA__
-__[ ok / test ]__
+__[ ok / single line comment ]__
 // A Hello World! program in C#.
+using System;
+namespace HelloWorld
+{
+}
+__[ ok / delimited comment 1 ]__
+/* A Hello World! program in C#. */
 using System;
 namespace HelloWorld
 {

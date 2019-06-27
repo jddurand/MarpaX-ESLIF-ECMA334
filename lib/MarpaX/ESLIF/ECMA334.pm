@@ -224,22 +224,8 @@ sub _lexicalEventManager {
             my $unicode_escape_sequence = $self->_subLexicalParse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer, $recurseLevel);
             $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Cf}]$/);
         }
-        elsif ($lexeme eq 'CAN_COMMENT') {
-            if ($self->{can_comment}) {
-                $eslifRecognizer->lexemeRead($lexeme, undef, 0);
-            }
-        }
-        elsif ($lexeme eq 'CAN_SINGLE_LINE_COMMENT') {
-            if ($self->{can_single_line_comment}) {
-                $eslifRecognizer->lexemeRead($lexeme, undef, 0);
-            }
-        }
-        elsif ($lexeme eq 'CAN_DELIMITED_COMMENT') {
-            if ($self->{can_delimited_comment}) {
-                $eslifRecognizer->lexemeRead($lexeme, undef, 0);
-            }
-        }
         else {
+            print STDOUT "======================> Unsupported sub lexeme $lexeme";
             croak("Unsupported sub lexeme $lexeme");
         }
 
@@ -304,21 +290,17 @@ __[ lexical ]__
 #
 # 1. Comments do not nest. The character sequences '/*' and '*/' have no special meaning within a <single line comment>,
 #    and the character sequences '//' and '/*' have no special meaning within a <delimited comment>.
-#    => This is why we introduce the fake lexemes CAN_SINGLE_LINE_COMMENT and CAN_DELIMITED_COMMENT.
 #
 # 2. Comments are not processed within character and string literals.
-#    => The fake lexemes CAN_COMMENT is used.
 #
 
-CAN_COMMENT                    ~ [^\s\S] # Matches nothing
-CAN_SINGLE_LINE_COMMENT        ~ [^\s\S] # Matches nothing
-CAN_DELIMITED_COMMENT          ~ [^\s\S] # Matches nothing
-<comment>                    ::= CAN_COMMENT <single line comment>                                        name => 'comment (1)'
-                               | CAN_COMMENT <delimited comment>                                          name => 'comment (2)'
-<single line comment>        ::= CAN_SINGLE_LINE_COMMENT '//' <input characters opt>                      name => 'single line comment'
-<input characters>           ::= <input character>+                                                       name => 'input characters'
-<input character>            ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u                           name => 'input character'
-<delimited comment>          ::= CAN_DELIMITED_COMMENT '/*' <delimited comment text opt> <asterisks> '*/' name => 'delimited comment'
+<comment>                    ::= <single line comment>                                                    name => 'comment (1)'
+                               | <delimited comment>                                                      name => 'comment (2)'
+<single line comment>        ::= '//' <input characters opt>                                              name => 'single line comment'
+# <input characters>           ::= <input character>+                                                       name => 'input characters'
+# <input character>            ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u                           name => 'input character'
+<input characters>           ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]+/u                          name => 'input characters'
+<delimited comment>          ::= '/*' <delimited comment text opt> <asterisks> '*/'                       name => 'delimited comment'
 <delimited comment text opt> ::=                                                                          name => 'delimited comment text opt (nulled)'
 <delimited comment text opt> ::= <delimited comment text>                                                 name => 'delimited comment text opt'
 <delimited comment text>     ::= <delimited comment section>+                                             name => 'delimited comment text'
@@ -326,7 +308,7 @@ CAN_DELIMITED_COMMENT          ~ [^\s\S] # Matches nothing
                                | <asterisks opt> <not slash or asterisk>                                  name => 'delimited comment section (2)'
 <asterisks opt>              ::=                                                                          name => 'asterisks opt (nulled)'
 <asterisks opt>              ::= <asterisks>                                                              name => 'asterisks opt'
-<asterisks>                  ::= /\*+/                                                                    name => 'asterisks'
+<asterisks>                  ::= '*'+                                                                     name => 'asterisks'
 <not slash or asterisk>      ::= /[^\/*]/                                                                 name => 'not slash or asterisk'
 
 #
@@ -786,7 +768,9 @@ keyword ::= 'abstract'                    name => 'keyword (1)'
 <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS CF>                 ~ [^\s\S]     # Matches nothing
 <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>                                     ~ [^\s\S]     # Matches nothing
 
-
+#
+# Events
+#
 event ^An_identifier_or_keyword_that_is_not_a_keyword                                     = predicted <An identifier or keyword that is not a keyword>
 event ^A_unicode_escape_sequence_representing_the_character_005f                          = predicted <A unicode escape sequence representing the character 005f>
 event ^A_unicode_escape_sequence_representing_a_character_of_classes_Lu_Ll_Lt_Lm_Lo_or_Nl = predicted <A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl>
