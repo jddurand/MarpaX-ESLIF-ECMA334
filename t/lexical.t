@@ -72,3 +72,11 @@ using System;
 namespace HelloWorld
 {
 }
+__[ ok / delimited comment 2 ]__
+/* A Hello World! program in C
+   #. ****x
+   //*/
+using System;
+namespace HelloWorld
+{
+}
