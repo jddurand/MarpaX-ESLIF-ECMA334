@@ -127,9 +127,11 @@ sub _parse {
     # We configured value interface to not accept ambiguity not null parse.
     # So no need to loop on value()
     #
+    local $MarpaX::ESLIF::ECMA334::recurseLevel = $recurseLevel;
     my $value = MarpaX::ESLIF::Value->new($eslifRecognizer, $valueInterface);
-    my $rc = $value->value();
+    croak 'Valuation failure' unless $value->value();
 
+    my $rc;
     if (0) { # For tests
         my $nresult = 0;
         while ($value->value()) {
@@ -158,7 +160,13 @@ sub _parse {
     # ------------------------
     # Return the value
     # ------------------------
-    return $rc;
+    $rc = $valueInterface->getResult;
+    if (! $recurseLevel) {
+        use Data::Dumper;
+        $log->debugf('[%2d] rc=%s', $recurseLevel, Dumper($rc)) 
+    }
+
+    return $rc
 }
 
 sub _subLexicalParse {
@@ -260,22 +268,22 @@ __[ lexical ]__
 # 7.3.1 General
 # -------------
 
-<input>              ::= <input section opt>              name => 'input'                                      # This is the default :start
-<input section opt>  ::=                                  name => 'input section opt (nulled)'
-<input section opt>  ::= <input section>                  name => 'input section opt'
+<input>              ::= <input section opt>                name => 'input'                                      # This is the default :start
+<input section opt>  ::=                                    name => 'input section opt (nulled)'
+<input section opt>  ::= <input section>                    name => 'input section opt'
 
-<input section>      ::= <input section part>+            name => 'input section'
+<input section>      ::= <input section part>+              name => 'input section'
 
-<input section part> ::= <input elements opt> <new line>  name => 'input section part (1)'
-                       | <pp directive>                   name => 'input section part (2)'
-<input elements opt> ::=                                  name => 'input elements opt (nulled)'
-<input elements opt> ::= <input elements>                 name => 'input elements opt'
+<input section part> ::= <input elements opt> <new line>    name => 'input section part (1)'
+                       | <pp directive>                     name => 'input section part (2)'
+<input elements opt> ::=                                    name => 'input elements opt (nulled)'
+<input elements opt> ::= <input elements>                   name => 'input elements opt'
 
-<input elements>     ::= <input element>+                 name => 'input elements'
+<input elements>     ::= <input element>+                   name => 'input elements'
 
-<input element>      ::= <whitespace>                     name => 'whitespace'
-                       | <comment>                        name => 'comment'
-                       | <token>                          name => 'token'
+<input element>      ::= <whitespace>                       name => 'input element (1)'
+                       | <comment>                          name => 'input element (2)'
+                       | <token>                            name => 'input element (3)'
 
 #
 # 7.3.2 Line terminators
@@ -298,26 +306,25 @@ __[ lexical ]__
 
 <comment>                    ::= <single line comment>                                                    name => 'comment (1)'
                                | <delimited comment>                                                      name => 'comment (2)'
-<single line comment>        ::= '//' <input characters opt>                                              name => 'single line comment'
-# <input characters>           ::= <input character>+                                                       name => 'input characters'
-# <input character>            ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u                           name => 'input character'
-<input characters>           ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]+/u                          name => 'input characters'   # Eat as much as possible in one go
-<delimited comment>          ::= '/*' <delimited comment text opt> <asterisks> '/'                        name => 'delimited comment'
-<delimited comment text opt> ::=                                                                          name => 'delimited comment text opt (nulled)'
-<delimited comment text opt> ::= <delimited comment text>                                                 name => 'delimited comment text opt'
-<delimited comment text>     ::= <delimited comment section>+                                             name => 'delimited comment text'
-<delimited comment section>  ::= '/'                                                                      name => 'delimited comment section (1)'
-                               | <asterisks opt> <not slash or asterisk>                                  name => 'delimited comment section (2)'
-<asterisks opt>              ::=                                                                          name => 'asterisks opt (nulled)'
-<asterisks opt>              ::= <asterisks>                                                              name => 'asterisks opt'
-<asterisks>                  ::= /\*+/                                                                    name => 'asterisks'          # Eat as much as possible askterisks in one go
-<not slash or asterisk>      ::= /[^\/*]/                                                                 name => 'not slash or asterisk'
+<single line comment>        ::= '//' <input characters opt>                       action => ::concat     name => 'single line comment'
+# <input characters>           ::= <input character>+                              action => ::concat     name => 'input characters'
+# <input character>            ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u  action => ::concat     name => 'input character'
+<input characters>           ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]+/u   action => ::shift      name => 'input characters'   # Eat as much as possible in one go
+<delimited comment>          ::= '/*' <delimited comment text opt> <asterisks> '/' action => ::concat     name => 'delimited comment'
+<delimited comment text opt> ::=                                                   action => ::undef      name => 'delimited comment text opt (nulled)'
+<delimited comment text opt> ::= <delimited comment text>                          action => ::shift      name => 'delimited comment text opt'
+<delimited comment text>     ::= <delimited comment section>+                      action => ::concat     name => 'delimited comment text'
+<delimited comment section>  ::= '/'                                               action => ::shift      name => 'delimited comment section (1)'
+                               | <asterisks opt> <not slash or asterisk>           action => ::concat     name => 'delimited comment section (2)'
+<asterisks opt>              ::=                                                   action => ::undef      name => 'asterisks opt (nulled)'
+<asterisks opt>              ::= <asterisks>                                       action => ::shift      name => 'asterisks opt'
+<asterisks>                  ::= /\*+/                                             action => ::shift      name => 'asterisks'          # Eat as much as possible askterisks in one go
+<not slash or asterisk>      ::= /[^\/*]/                                          action => ::shift      name => 'not slash or asterisk'
 
 #
 # 7.3.4 White space
 # -----------------
-<whitespace>           ::= <whitespace character>+                                  name => 'whitespace'
-<whitespace character> ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]/                       name => 'whitespace character'
+<whitespace>           ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/                      name => 'whitespace'
 
 #
 # 7.4 Tokens

@@ -149,14 +149,16 @@ sub u8 {
                 # No. Take first \uhhhh as a code point.
                 # Eval returns undef in scalar context if there is a failure.
                 #
-                $result .= eval {chr(shift @hex) } // croak "Invalid code point \\U${hexdigit1}${hexdigit2}${hexdigit3}${hexdigit4}${hexdigit5}${hexdigit6}${hexdigit7}${hexdigit8}";
+                my $hex = shift(@hex);
+                $result .= eval {chr($hex) } // croak "Invalid code point \\U" . sprintf('%4x', $hex)
             }
         } else {
             #
             # \uhhhh taken as a code point.
             # Eval returns undef in scalar context if there is a failure.
             #
-            $result .= eval {chr(shift @hex) } // croak "Invalid code point \\U${hexdigit1}${hexdigit2}${hexdigit3}${hexdigit4}${hexdigit5}${hexdigit6}${hexdigit7}${hexdigit8}";
+            my $hex = shift(@hex);
+            $result .= eval {chr($hex) } // croak "Invalid code point \\U" . sprintf('%4x', $hex)
         }
     }
 

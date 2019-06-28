@@ -32,9 +32,9 @@ isa_ok($ecma334, 'MarpaX::ESLIF::ECMA334');
 diag("###########################################################");
 diag("Inline data");
 diag("###########################################################");
-foreach (__PACKAGE__->section_data_names) {
-    my $want_ok = ($_ =~ /^ok/);
-    my $want_ko = ($_ =~ /^ko/);
+foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAGE__->section_data_names) {
+    my $want_ok = ($_ =~ /^[0-9]+\s*ok/);
+    my $want_ko = ($_ =~ /^[0-9]+\s*ko/);
     #
     # Just in case __DATA__ sections would not start with ok or ko -;
     #
@@ -60,22 +60,22 @@ sub do_test {
 done_testing();
 
 __DATA__
-__[ ok / single line comment ]__
+__[ 001 ok / single line comment ]__
 // A Hello World! program in C#.
 using System;
 namespace HelloWorld
 {
 }
-__[ ok / delimited comment 1 ]__
+__[ 002 ok / delimited comment 1 ]__
 /* A Hello World! program in C#. ****x//*/
 using System;
 namespace HelloWorld
 {
 }
-__[ ok / delimited comment 2 ]__
+__[ 003 ok / delimited comment 2 ]__
 /* A Hello World! program in C
    #. ****x
-   //*/
+   //*//**/
 using System;
 namespace HelloWorld
 {
