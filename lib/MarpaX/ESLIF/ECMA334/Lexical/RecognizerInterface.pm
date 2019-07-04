@@ -2,6 +2,7 @@ use strict;
 use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface;
+use Carp qw/croak/;
 
 # ABSTRACT: MarpaX::ESLIF::ECMA334 Lexical Recognizer Interface
 
@@ -30,7 +31,7 @@ MarpaX::ESLIF::ECMA334's Lexical Recognizer Interface
 
 =head2 new($class, %options)
 
-Instantiate a new recognizer interface object. C<%options> may contain:
+Instantiate a new recognizer interface object. C<%options> should contain at least:
 
 =over
 
@@ -48,7 +49,7 @@ The encoding of the data
 
 sub new {
     my ($pkg, %options) = @_;
-    bless \%options, $pkg
+    bless { hasCompletion => 0, recurseLevel => 0, %options}, $pkg
 }
 
 # ----------------
@@ -87,7 +88,7 @@ Returns encoding information. Default is undef.
 
 =cut
 
-sub encoding               { $_[0]->{options}->{encoding} } # Let MarpaX::ESLIF guess eventually
+sub encoding               { $_[0]->{encoding} } # Let MarpaX::ESLIF guess eventually - undef is ok
 
 =head3 data($self)
 
@@ -95,7 +96,7 @@ Returns last bunch of data. Default is the string passed in the constructor.
 
 =cut
 
-sub data                   { $_[0]->{input} } # Data itself
+sub data                   { $_[0]->{input} // croak 'Undefined input' } # Data itself
 
 =head3 isWithDisableThreshold($self)
 
@@ -111,7 +112,7 @@ Returns a true or a false value, indicating if exhaustion event is on or off, re
 
 =cut
 
-sub isWithExhaustion       {        0 } # Exhaustion event ?
+sub isWithExhaustion       { $_[0]->{exhaustion} // 0 } # Exhaustion event ? Default is false.
 
 =head3 isWithNewline($self)
 
@@ -119,7 +120,7 @@ Returns a true or a false value, indicating if newline count is on or off, respe
 
 =cut
 
-sub isWithNewline          {        1 } # Newline count ?
+sub isWithNewline          { $_[0]->{newline} // 1 } # Newline count ? Default is true.
 
 =head3 isWithTrack($self)
 
@@ -127,7 +128,29 @@ Returns a true or a false value, indicating if absolute position tracking is on 
 
 =cut
 
-sub isWithTrack            {        0 } # Absolute position tracking ?
+sub isWithTrack            { $_[0]->{newline} // 0 } # Absolute position tracking ? Default is false.
+
+=head2 Additional methods
+
+=head3 recurseLevel($self)
+
+Returns recurse level.
+
+=cut
+
+sub recurseLevel          { $_[0]->{recurseLevel} // 0 } # Recurse level - defaulting to 0
+
+=head3 hasCompletion($self)
+
+Returns a boolean indicating if completion has been reached at least once.
+
+=cut
+
+sub hasCompletion {
+    my $self = shift;
+
+    return @_ ? $self->{hasCompletion} = $_[0] : $self->{hasCompletion}
+}
 
 =head1 SEE ALSO
 

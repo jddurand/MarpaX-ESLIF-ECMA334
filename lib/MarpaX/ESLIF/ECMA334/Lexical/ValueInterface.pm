@@ -19,7 +19,7 @@ MarpaX::ESLIF::ECMA334's Lexical Value Interface
 
     use MarpaX::ESLIF::ECMA334::Lexical::ValueInterface;
 
-    my $valueInterface = MarpaX::ESLIF::ECMA334::Lexica::ValueInterface->new();
+    my $valueInterface = MarpaX::ESLIF::ECMA334::Lexical::ValueInterface->new();
 
 =cut
 
@@ -103,14 +103,20 @@ Sets the current parse tree value.
 
 sub setResult          { return $_[0]->{result} = $_[1] }
 
-=head3 u4
+=head3 unicode_escape_sequence
 
-unicode escape sequence with four hex digits action.
+unicode escape sequence with four or eigh digits
 
 =cut
 
-sub u4 {
-    my ($self, $u, $hexdigit1, $hexdigit2, $hexdigit3, $hexdigit4) = @_;
+sub unicode_escape_sequence {
+    my ($self, $utf8bytes) = @_;
+
+    return substr($utf8bytes, 0, 2, '') eq '\\u' ? $self->_u4(split(//, $utf8bytes)) : $self->_u8(split(//, $utf8bytes))
+}
+
+sub _u4 {
+    my ($self, $hexdigit1, $hexdigit2, $hexdigit3, $hexdigit4) = @_;
 
     my $codepoint = hex("${hexdigit1}${hexdigit2}${hexdigit3}${hexdigit4}");
     my $result = chr($codepoint) // croak "Invalid code point \\u${hexdigit1}${hexdigit2}${hexdigit3}${hexdigit4}";
@@ -118,14 +124,8 @@ sub u4 {
     return $result
 }
 
-=head3 u8
-
-unicode escape sequence with eight hex digits action.
-
-=cut
-
-sub u8 {
-    my ($self, $u, $hexdigit1, $hexdigit2, $hexdigit3, $hexdigit4, $hexdigit5, $hexdigit6, $hexdigit7, $hexdigit8) = @_;
+sub _u8 {
+    my ($self, $hexdigit1, $hexdigit2, $hexdigit3, $hexdigit4, $hexdigit5, $hexdigit6, $hexdigit7, $hexdigit8) = @_;
 
     my @hex = (hex("${hexdigit1}${hexdigit2}${hexdigit3}${hexdigit4}"), hex("${hexdigit5}${hexdigit6}${hexdigit7}${hexdigit8}"));
 

@@ -71,8 +71,13 @@ my $UNICODE_ESCAPE_SEQUENCE_BNF = $LEXICAL_BNF;
 $UNICODE_ESCAPE_SEQUENCE_BNF .= "\n:start ::= <unicode escape sequence>\n";
 my $UNICODE_ESCAPE_SEQUENCE_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $UNICODE_ESCAPE_SEQUENCE_BNF);
 
+my $UNICODE_ESCAPE_SEQUENCE = 'UNICODE ESCAPE SEQUENCE';
+my $TRUE = 'TRUE';
+my $FALSE = 'FALSE';
+my $lexicalValue = MarpaX::ESLIF::ECMA334::Lexical::ValueInterface->new();
+
 sub new {
-    my ($pkg, %options) = @_;
+    my ($pkg) = @_;
 
     return bless {
         grammars => {
@@ -84,159 +89,182 @@ sub new {
             can_comment => 1,                     # At start it is true
             can_single_line_comment => 1,         # At start it is true
             can_delimited_comment => 1            # At start it is true
-        },
-        options => \%options
+        }
     }, $pkg
 }
 
 sub lexicalParse {
-    my ($self, $input, $eslifRecognizer, $recurseLevel) = @_;
+    my ($self, %options) = @_;
 
-    return $self->_parse($input,
+    return $self->_parse($options{grammar} // $self->{grammars}->{lexical},
                          'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
                          'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
-                         $eslifRecognizer,
                          \&_lexicalEventManager,
-                         $recurseLevel);
+                         input => $options{input}, # May be undef
+                         encoding => $options{encoding},
+                         recurseLevel => $options{recurseLevel}
+        );
 }
 
 sub _parse {
-    my ($self, $input, $recognizerInterfaceClass, $valueInterfaceClass, $eslifRecognizer, $eventManager, $recurseLevel) = @_;
+    my ($self, $grammar, $recognizerInterfaceClass, $valueInterfaceClass, $eventManager, %options) = @_;
 
-    $recurseLevel //= 0;
-
-    if (! defined($eslifRecognizer)) {
-        my $recognizerInterface = $recognizerInterfaceClass->new(options => $self->{options}, input => $input);
-        $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($self->{grammars}->{lexical}, $recognizerInterface);
-    }
-
-    # -----------------------------
-    # Instanciate a value interface
-    # -----------------------------
+    # -------------------------------------------
+    # Instanciate recognizer and value interfaces
+    # -------------------------------------------
+    my $recognizerInterface = $recognizerInterfaceClass->new(%options);
     my $valueInterface = $valueInterfaceClass->new();
 
-    $eslifRecognizer->scan(1) || croak "Initial scan() failed";   # 1 for initial events, eventually
-    $self->$eventManager($recognizerInterfaceClass, $valueInterfaceClass, $eslifRecognizer, $recurseLevel);
+    # ------------------------
+    # Instanciate a recognizer
+    # ------------------------
+    my $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($grammar, $recognizerInterface);
+
+    # -------------------------------------------------------------------------
+    # Make sure all data (that is recognizer interface memory) is seen by ESLIF
+    # -------------------------------------------------------------------------
+    croak 'read failure' unless $eslifRecognizer->read();
+    #
+    # Input must be defined
+    #
+    croak 'undefined input' unless defined $eslifRecognizer->input();
+    $log->debugf('[%2d] Input (10st characters): %s', $recognizerInterface->recurseLevel, substr($eslifRecognizer->input, 0, 10));
+
+    # -----------------------------------------------------
+    # Run recognizer manually so that events are accessible
+    # -----------------------------------------------------
+    $eslifRecognizer->scan(1) || croak 'Initial scan failed';
+    $self->$eventManager($eslifRecognizer, $recognizerInterface);
     if ($eslifRecognizer->isCanContinue) {
-        do {
-            $eslifRecognizer->resume || croak 'resume() failed';
-            $self->$eventManager($recognizerInterfaceClass, $valueInterfaceClass, $eslifRecognizer, $recurseLevel)
-        } while ($eslifRecognizer->isCanContinue)
+        {
+            do {
+                if (! $eslifRecognizer->resume) {
+                    #
+                    # This is a failure unless it is a sub-grammar that has reached completion at least once
+                    #
+                    if ($recognizerInterface->hasCompletion && $recognizerInterface->recurseLevel) {
+                        last;
+                    } else {
+                        $log->debugf('[%2d] resume failed, hasCompletion: %d', $recognizerInterface->recurseLevel, $recognizerInterface->hasCompletion);
+                        croak 'resume failed';
+                    }
+                }
+                $self->$eventManager($eslifRecognizer, $recognizerInterface)
+            } while ($eslifRecognizer->isCanContinue)
+        }
     }
-    #
-    # We configured value interface to not accept ambiguity not null parse.
-    # So no need to loop on value()
-    #
-    local $MarpaX::ESLIF::ECMA334::recurseLevel = $recurseLevel;
+
+    # -----------------------------------------------------------------------------------------
+    # Call for valuation (we configured value interface to not accept ambiguity not null parse)
+    # -----------------------------------------------------------------------------------------
     my $value = MarpaX::ESLIF::Value->new($eslifRecognizer, $valueInterface);
     croak 'Valuation failure' unless $value->value();
-
-    my $rc;
-    if (0) { # For tests
-        my $nresult = 0;
-        while ($value->value()) {
-            ++$nresult;
-            my $rc2 = $valueInterface->getResult;
-            $log->noticef('Result:');
-            use Data::Dumper;
-            print Dumper($rc2);
-            use Test::Deep::NoTest qw/cmp_details deep_diag/;
-            if (defined($rc) && defined($rc2)) {
-                my ($ok, $stack) = cmp_details($rc, $rc2);
-                if ($ok) {
-                    print "OK\n";
-                } else {
-                    print "KO\n";
-                    print deep_diag($stack);
-                    exit;
-                }
-            }
-            $rc = $rc2;
-        }
-        croak "There are $nresult results";
-        croak 'No result' unless defined($rc);
-    }
 
     # ------------------------
     # Return the value
     # ------------------------
-    $rc = $valueInterface->getResult;
-    if (! $recurseLevel) {
-        use Data::Dumper;
-        $log->debugf('[%2d] rc=%s', $recurseLevel, Dumper($rc)) 
-    }
-
-    return $rc
+    return $valueInterface->getResult;
 }
 
 sub _subLexicalParse {
-    my ($self, $recognizerInterfaceClass, $grammar_name, $eslifRecognizer, $recurseLevel) = @_;
+    my ($self, $grammarName, $eslifRecognizer, $recognizerInterface) = @_;
 
-    $recurseLevel //= 0;
-    ++$recurseLevel;
-
+    my $recurseLevel = $recognizerInterface->recurseLevel + 1;
     #
-    # Prepare a $grammar_name recognizer that shares its source with $eslifRecognizer
+    # Prepare a $grammar_name recognizer that start where is current $eslifRecognizer
     #
-    $log->debugf('[%2d] Sub grammar: %s', $recurseLevel, $grammar_name);
-    my $nextEslifRecognizer = $eslifRecognizer->newFrom($self->{grammars}->{$grammar_name});
-    my $rc = eval { $self->lexicalParse(undef, $nextEslifRecognizer, $recurseLevel) };
+    $log->debugf('[%2d] Sub grammar: %s', $recurseLevel, $grammarName);
+    my $rc = eval {
+        $self->lexicalParse(
+            input => $eslifRecognizer->input,
+            encoding => $recognizerInterface->encoding,
+            recurseLevel => $recurseLevel,
+            exhaustion => 1,
+            grammar => $self->{grammars}->{$grammarName})};
+    $log->debugf('[%2d] %s', $recurseLevel, $@) if $@;
     $log->debugf('[%2d] rc=%s', $recurseLevel, $rc);
 
-    --$recurseLevel;
     return $rc;
 }
 
 sub _lexicalEventManager {
-    my ($self, $recognizerInterfaceClass, $valueInterfaceClass, $eslifRecognizer, $recurseLevel) = @_;
+    my ($self, $eslifRecognizer, $recognizerInterface) = @_;
 
-    # $eslifRecognizer->read() unless $eslifRecognizer->isEof();
-    # $log->debugf('[%2d] Input: %s', $eslifRecognizer->input());
+    my @lexemeExpected = @{$eslifRecognizer->lexemeExpected()};
+    $log->debugf('[%2d] Expected: %s', $recognizerInterface->recurseLevel, join(', ', @lexemeExpected));
+
     #
-    # In the lexical event manager, we are only interested
-    # to know if lexeme matches at a given point
+    # Sub-grammar completion ?
     #
-    # my $events = $eslifRecognizer->events();
-    my $lexemeExpected = $eslifRecognizer->lexemeExpected();
-    # $log->debugf('Events: %s', $events);
-    $log->debugf('[%2d] Expected: %s', $recurseLevel, $lexemeExpected);
-    # $eslifRecognizer->progressLog(-1, -1, MarpaX::ESLIF::Logger::Level->GENERICLOGGER_LOGLEVEL_DEBUG);
+    my @events = map { $_->{event} } @{$eslifRecognizer->events()};
+    if ($recognizerInterface->recurseLevel && grep {$_ eq 'sub_grammar_completion$'} @events) {
+        $log->debugf('[%2d] Sub-grammar reached completion at least once', $recognizerInterface->recurseLevel);
+        $recognizerInterface->hasCompletion(1);
+    }
 
     my $haveLexeme = 0;
-    foreach my $lexeme (@{$lexemeExpected}) {
+    foreach my $lexeme (@lexemeExpected) {
         my $match = undef;
         if ($lexeme eq 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD') {
-            my $identifier_or_keyword = $self->_subLexicalParse($recognizerInterfaceClass, 'identifier_or_keyword', $eslifRecognizer, $recurseLevel);
-            my $keyword = defined($identifier_or_keyword) ? $self->_subLexicalParse($recognizerInterfaceClass, 'keyword', $eslifRecognizer, $recurseLevel) : undef;
+            my $identifier_or_keyword = $self->_subLexicalParse('identifier_or_keyword', $eslifRecognizer, $recognizerInterface);
+            my $keyword = defined($identifier_or_keyword) ? $self->_subLexicalParse('keyword', $eslifRecognizer, $recognizerInterface) : undef;
             $match = $identifier_or_keyword if defined($identifier_or_keyword) && ! defined($keyword);
         }
-        elsif ($lexeme eq 'A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F') {
-            my $unicode_escape_sequence = $self->_subLexicalParse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer, $recurseLevel);
-            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence eq "\x005f");
+        elsif ($lexeme eq 'ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE') {
+            my $identifier_or_keyword = $self->_subLexicalParse('identifier_or_keyword', $eslifRecognizer, $recognizerInterface);
+            my $true_or_false = defined($identifier_or_keyword) ? ($eslifRecognizer->lexemeTry($TRUE) || $eslifRecognizer->lexemeTry($FALSE)) : undef;
+            $match = $identifier_or_keyword if defined($identifier_or_keyword) && ! defined($true_or_false);
         }
-        elsif ($lexeme eq 'A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES LU LL LT LM LO OR NL') {
-            my $unicode_escape_sequence = $self->_subLexicalParse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer, $recurseLevel);
-            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]$/);
+        elsif ($lexeme eq 'CHARACTER 005F') {
+            if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
+                my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
+                my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
+                $match = $unicode_escape_sequence if $unicode_escape_sequence eq "\x{005f}";
+            }
         }
-        elsif ($lexeme eq 'A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES MN OR MC') {
-            my $unicode_escape_sequence = $self->_subLexicalParse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer, $recurseLevel);
-            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Mn}\p{Mc}]$/);
+        elsif ($lexeme eq 'CHARACTER OF CLASSES Lu Ll Lt Lm Lo OR Nl') {
+            if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
+                my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
+                my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
+                $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]$/;
+            }
         }
-        elsif ($lexeme eq 'A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS ND') {
-            my $unicode_escape_sequence = $self->_subLexicalParse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer, $recurseLevel);
-            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Nd}]$/);
+        elsif ($lexeme eq 'CHARACTER OF CLASSES Mn OR Mc') {
+            if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
+                my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
+                my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
+                $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Mn}\p{Mc}]$/;
+            }
         }
-        elsif ($lexeme eq 'A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS PC') {
-            my $unicode_escape_sequence = $self->_subLexicalParse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer, $recurseLevel);
-            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Pc}]$/);
+        elsif ($lexeme eq 'CHARACTER OF THE CLASS Nd') {
+            if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
+                my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
+                my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
+                $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Nd}]$/;
+            }
         }
-        elsif ($lexeme eq 'A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS CF') {
-            my $unicode_escape_sequence = $self->_subLexicalParse($recognizerInterfaceClass, 'unicode_escape_sequence', $eslifRecognizer, $recurseLevel);
-            $match = $unicode_escape_sequence if (defined($unicode_escape_sequence) && $unicode_escape_sequence =~ /^[\p{Cf}]$/);
+        elsif ($lexeme eq 'CHARACTER OF THE CLASS Pc') {
+            if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
+                my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
+                my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
+                $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Pc}]$/;
+            }
+        }
+        elsif ($lexeme eq 'CHARACTER OF THE CLASS Cf') {
+            if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
+                my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
+                my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
+                $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Cf}]$/;
+            }
+        }
+        elsif ($lexeme eq 'TRUE' || $lexeme eq 'FALSE') {
+            if ($eslifRecognizer->lexemeTry($lexeme)) {
+                my $utf8bytes = $eslifRecognizer->lexemeLastTry($lexeme) || croak "$lexeme is undef";
+                $match = $utf8bytes;
+            }
         }
         else {
-            print STDOUT "======================> Unsupported sub lexeme $lexeme";
-            croak("Unsupported sub lexeme $lexeme");
+            croak "Unsupported lexeme $lexeme";
         }
 
         if (defined($match)) {
@@ -251,7 +279,7 @@ sub _lexicalEventManager {
 
     if ($haveLexeme) {
         $log->debugf('Lexeme complete');
-        $eslifRecognizer->lexemeComplete(1)
+        $eslifRecognizer->lexemeComplete(bytes::length($utf8bytes))
     }
 }
 
@@ -259,10 +287,21 @@ sub _lexicalEventManager {
 
 __DATA__
 __[ lexical ]__
-:default ::= action => my_action
 #
 # 7.3 Lexical analysis
 # ====================
+#
+# Five basic elements make up the lexical structure of a C# source file:
+# - Line terminators (7.3.2). Rules:
+#   + <new line>
+# - whitespace (7.3.4). Rules:
+#   + <whitespace>
+# - comments (7.3.3). Rules:
+#   + <comment>
+# - tokens (7.4). Rules:
+#   + <token>
+# - preprocessing directives (7.5). Rules:
+#   + <pp directive>
 
 #
 # 7.3.1 General
@@ -346,8 +385,7 @@ __[ lexical ]__
 # 7.4.2 Unicode character escape sequence
 # ---------------------------------------
 
-<unicode escape sequence> ::= '\\u' <hex digit> <hex digit> <hex digit> <hex digit>                                                 name => 'unicode escape sequence (1)' action => u4
-                            | '\\U' <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> name => 'unicode escape sequence (2)' action => u8
+<unicode escape sequence> ::= <UNICODE ESCAPE SEQUENCE> action => unicode_escape_sequence
 
 #
 # 7.4.3 Identifiers
@@ -406,7 +444,7 @@ keyword ::= 'abstract'                    name => 'keyword (1)'
           | 'event'                       name => 'keyword (21)'
           | 'explicit'                    name => 'keyword (22)'
           | 'extern'                      name => 'keyword (23)'
-          | 'false'                       name => 'keyword (24)'
+          | FALSE                         name => 'keyword (24)'
           | 'finally'                     name => 'keyword (25)'
           | 'fixed'                       name => 'keyword (26)'
           | 'float'                       name => 'keyword (27)'
@@ -447,7 +485,7 @@ keyword ::= 'abstract'                    name => 'keyword (1)'
           | 'switch'                      name => 'keyword (62)'
           | 'this'                        name => 'keyword (63)'
           | 'throw'                       name => 'keyword (64)'
-          | 'true'                        name => 'keyword (65)'
+          | TRUE                          name => 'keyword (65)'
           | 'try'                         name => 'keyword (66)'
           | 'typeof'                      name => 'keyword (67)'
           | 'uint'                        name => 'keyword (68)'
@@ -460,6 +498,7 @@ keyword ::= 'abstract'                    name => 'keyword (1)'
           | 'void'                        name => 'keyword (75)'
           | 'volatile'                    name => 'keyword (76)'
           | 'while'                       name => 'keyword (77)'
+
 <contextual keyword> ::= 'add'            name => 'contextual keyword (1)'
                        | 'alias'          name => 'contextual keyword (2)'
                        | 'ascending'      name => 'contextual keyword (3)'
@@ -499,8 +538,8 @@ keyword ::= 'abstract'                    name => 'keyword (1)'
 
 # 7.4.5.2 Boolean literals
 
-<boolean literal> ::= 'true'              name => 'boolean literal (1)'
-                    | 'false'             name => 'boolean literal (2)'
+<boolean literal> ::= TRUE                name => 'boolean literal (1)'
+                    | FALSE               name => 'boolean literal (2)'
 
 # 7.4.5.3 Integer literals
 
@@ -674,8 +713,8 @@ keyword ::= 'abstract'                    name => 'keyword (1)'
                            | <pp equality expression> <whitespace opt> '!=' <whitespace opt> <pp unary expression> name => 'pp equality expression (3)'
 <pp unary expression>    ::= <pp primary expression>                                                               name => 'pp unary expression (1)'
                            | '!' <whitespace opt> <pp unary expression>                                            name => 'pp unary expression (2)'
-<pp primary expression>  ::= 'true'                                                                                name => 'pp primary expression (1)'
-                           | 'false'                                                                               name => 'pp primary expression (2)'
+<pp primary expression>  ::= TRUE                                                                                  name => 'pp primary expression (1)'
+                           | FALSE                                                                                 name => 'pp primary expression (2)'
                            | <conditional symbol>                                                                  name => 'pp primary expression (3)'
                            | '(' <whitespace opt> <pp expression> <whitespace opt> ')'                             name => 'pp primary expression (4)'
 
@@ -760,21 +799,23 @@ keyword ::= 'abstract'                    name => 'keyword (1)'
 # Lexemes
 #
 <An identifier or keyword that is not a keyword>                                     ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
-<A unicode escape sequence representing the character 005f>                          ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>
-<A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl> ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES LU LL LT LM LO OR NL>
-<A unicode escape sequence representing a character of classes Mn or Mc>             ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES MN OR MC>
-<A unicode escape sequence representing a character of the class Nd>                 ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS ND>
-<A unicode escape sequence representing a character of the class Pc>                 ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS PC>
-<A unicode escape sequence representing a character of the class Cf>                 ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS CF>
+<A unicode escape sequence representing the character 005f>                          ::= <CHARACTER 005F>
+<A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl> ::= <CHARACTER OF CLASSES Lu Ll Lt Lm Lo OR Nl>
+<A unicode escape sequence representing a character of classes Mn or Mc>             ::= <CHARACTER OF CLASSES Mn OR Mc>
+<A unicode escape sequence representing a character of the class Nd>                 ::= <CHARACTER OF THE CLASS Nd>
+<A unicode escape sequence representing a character of the class Pc>                 ::= <CHARACTER OF THE CLASS Pc>
+<A unicode escape sequence representing a character of the class Cf>                 ::= <CHARACTER OF THE CLASS Cf>
 <Any identifier or keyword except true or false>                                     ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
 
+TRUE                                                                                 ~ 'true'
+FALSE                                                                                ~ 'false'
 <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>                                     ~ [^\s\S]     # Matches nothing
-<A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>                          ~ [^\s\S]     # Matches nothing
-<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES LU LL LT LM LO OR NL> ~ [^\s\S]     # Matches nothing
-<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES MN OR MC>             ~ [^\s\S]     # Matches nothing
-<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS ND>                 ~ [^\s\S]     # Matches nothing
-<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS PC>                 ~ [^\s\S]     # Matches nothing
-<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF THE CLASS CF>                 ~ [^\s\S]     # Matches nothing
+<CHARACTER 005F>                                                                     ~ [^\s\S]     # Matches nothing
+<CHARACTER OF CLASSES Lu Ll Lt Lm Lo OR Nl>                                          ~ [^\s\S]     # Matches nothing
+<CHARACTER OF CLASSES Mn OR Mc>                                                      ~ [^\s\S]     # Matches nothing
+<CHARACTER OF THE CLASS Nd>                                                          ~ [^\s\S]     # Matches nothing
+<CHARACTER OF THE CLASS Pc>                                                          ~ [^\s\S]     # Matches nothing
+<CHARACTER OF THE CLASS Cf>                                                          ~ [^\s\S]     # Matches nothing
 <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>                                     ~ [^\s\S]     # Matches nothing
 
 #
@@ -788,6 +829,11 @@ event ^A_unicode_escape_sequence_representing_a_character_of_the_class_Nd       
 event ^A_unicode_escape_sequence_representing_a_character_of_the_class_Pc                 = predicted <A unicode escape sequence representing a character of the class Pc>
 event ^A_unicode_escape_sequence_representing_a_character_of_the_class_Cf                 = predicted <A unicode escape sequence representing a character of the class Cf>
 event ^Any_identifier_or_keyword_except_true_or_false                                     = predicted <Any identifier or keyword except true or false>
+event sub_grammar_completion$                                                             = completed <identifier or keyword>
+event sub_grammar_completion$                                                             = completed <keyword>
+
+<UNICODE ESCAPE SEQUENCE>   ~ /\\u[0-9A-Fa-f]{4}/
+                            | /\\u[0-9A-Fa-f]{8}/
 
 __[ syntactic ]__
 todo ::= 'TO DO'

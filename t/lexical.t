@@ -49,7 +49,7 @@ foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAG
 sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
-    my @r = $ecma334->lexicalParse($input, $encoding);
+    my @r = $ecma334->lexicalParse(input => $input, encoding => $encoding);
 
     ok($want_ok ? scalar(@r) : !scalar(@r), $name);
 }
@@ -62,20 +62,6 @@ done_testing();
 __DATA__
 __[ 001 ok / single line comment ]__
 // A Hello World! program in C#.
-using System;
-namespace HelloWorld
-{
-}
-__[ 002 ok / delimited comment 1 ]__
-/* A Hello World! program in C#. ****x//*/
-using System;
-namespace HelloWorld
-{
-}
-__[ 003 ok / delimited comment 2 ]__
-/* A Hello World! program in C
-   #. ****x
-   //*//**/
 using System;
 namespace HelloWorld
 {
