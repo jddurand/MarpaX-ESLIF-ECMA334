@@ -179,7 +179,6 @@ sub _subLexicalParse {
             input => $eslifRecognizer->input,
             encoding => $recognizerInterface->encoding,
             recurseLevel => $recurseLevel,
-            exhaustion => 1,
             grammar => $self->{grammars}->{$grammarName})};
     $log->debugf('[%2d] %s', $recurseLevel, $@) if $@;
     $log->debugf('[%2d] rc=%s', $recurseLevel, $rc);
@@ -202,9 +201,12 @@ sub _lexicalEventManager {
         $recognizerInterface->hasCompletion(1);
     }
 
-    my $haveLexeme = 0;
+    #
+    # Hash { $lexeme => $match }
+    my %lexemes = ();
     foreach my $lexeme (@lexemeExpected) {
         my $match = undef;
+
         if ($lexeme eq 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD') {
             my $identifier_or_keyword = $self->_subLexicalParse('identifier_or_keyword', $eslifRecognizer, $recognizerInterface);
             my $keyword = defined($identifier_or_keyword) ? $self->_subLexicalParse('keyword', $eslifRecognizer, $recognizerInterface) : undef;
@@ -271,15 +273,24 @@ sub _lexicalEventManager {
             #
             # A lexeme that we have to insert ourself
             #
-            $log->debugf('Match on: %s', $lexeme);
-            $eslifRecognizer->lexemeAlternative($lexeme, $match) if defined($match);
-            $haveLexeme = 1;
+            $log->debugf('Match on: %s, length: %d bytes', $lexeme, bytes::length($match));
+            $lexemes{$lexeme} = $match;
         }
     }
 
-    if ($haveLexeme) {
-        $log->debugf('Lexeme complete');
-        $eslifRecognizer->lexemeComplete(bytes::length($utf8bytes))
+    if (%lexemes) {
+        #
+        # Take the longests
+        #
+        my $longestMatch = (sort { bytes::length($b) <=> bytes::length($a) } values %lexemes)[0];
+        my $length = bytes::length($longestMatch);
+        foreach my $lexeme (grep { bytes::length($lexemes{$_}) == $length} keys %lexemes) {
+            my $match = $lexemes{$lexeme};
+            $log->debugf('lexemeAlternative: %s: %s', $lexeme, $match);
+            $eslifRecognizer->lexemeAlternative($lexeme, $match);
+        }
+        $log->debugf('lexemeComplete on %d bytes', $length);
+        $eslifRecognizer->lexemeComplete($length);
     }
 }
 

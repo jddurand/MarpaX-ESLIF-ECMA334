@@ -128,7 +128,7 @@ Returns a true or a false value, indicating if absolute position tracking is on 
 
 =cut
 
-sub isWithTrack            { $_[0]->{newline} // 0 } # Absolute position tracking ? Default is false.
+sub isWithTrack            { $_[0]->{track} // 0 } # Absolute position tracking ? Default is false.
 
 =head2 Additional methods
 
