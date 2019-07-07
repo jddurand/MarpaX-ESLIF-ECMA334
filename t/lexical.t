@@ -5,17 +5,18 @@ use Data::Section 0.200006 -setup;
 use Test::More;
 use Test::More::UTF8;
 use Test::Trap;
-
 use Log::Any qw/$log/;
 use Log::Log4perl qw/:easy/;
 use Log::Any::Adapter;
 use Log::Any::Adapter::Log4perl;  # Just to make sure dzil catches it
 
+binmode STDOUT, ":utf8";
+
 #
 # Init log
 #
 our $defaultLog4perlConf = '
-log4perl.rootLogger              = DEBUG, Screen
+log4perl.rootLogger              = TRACE, Screen
 log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
 log4perl.appender.Screen.stderr  = 0
 log4perl.appender.Screen.layout  = PatternLayout
@@ -65,4 +66,5 @@ __[ 001 ok / single line comment ]__
 using System;
 namespace HelloWorld
 {
+  var Δ = 1;
 }

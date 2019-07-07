@@ -56,26 +56,34 @@ my $LEXICAL_BNF = ${__PACKAGE__->section_data('lexical')};
 my $SYNTACTIC_BNF = ${__PACKAGE__->section_data('syntactic')};
 
 my $LEXICAL_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $LEXICAL_BNF);
+print STDERR "LEXICAL_GRAMMAR done\n";
 my $SYNTACTIC_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $SYNTACTIC_BNF);
+print STDERR "SYNTACTIC_GRAMMAR done\n";
 
 # Sub-lexical grammars
 my $IDENTIFIER_OR_KEYWORD_BNF = $LEXICAL_BNF;
 $IDENTIFIER_OR_KEYWORD_BNF .= "\n:start ::= <identifier or keyword>\n";
+$IDENTIFIER_OR_KEYWORD_BNF .= "\nevent sub_grammar_completion\$ = completed <identifier or keyword>\n";
 my $IDENTIFIER_OR_KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $IDENTIFIER_OR_KEYWORD_BNF);
+print STDERR "IDENTIFIER_OR_KEYWORD_GRAMMAR done\n";
 
 my $KEYWORD_BNF = $LEXICAL_BNF;
 $KEYWORD_BNF .= "\n:start ::= <keyword>\n";
+$KEYWORD_BNF .= "\nevent sub_grammar_completion\$ = completed <keyword>\n";
 my $KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $KEYWORD_BNF);
+print STDERR "KEYWORD_GRAMMAR done\n";
 
 my $UNICODE_ESCAPE_SEQUENCE_BNF = $LEXICAL_BNF;
 $UNICODE_ESCAPE_SEQUENCE_BNF .= "\n:start ::= <unicode escape sequence>\n";
 my $UNICODE_ESCAPE_SEQUENCE_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $UNICODE_ESCAPE_SEQUENCE_BNF);
+print STDERR "UNICODE_ESCAPE_SEQUENCE_GRAMMAR done\n";
 
 my $UNICODE_ESCAPE_SEQUENCE = 'UNICODE ESCAPE SEQUENCE';
 my $TRUE = 'TRUE';
 my $FALSE = 'FALSE';
 my $lexicalValue = MarpaX::ESLIF::ECMA334::Lexical::ValueInterface->new();
 
+$Log::Log4perl::Logger::APPENDER_BY_NAME{Screen}->threshold($TRACE);
 sub new {
     my ($pkg) = @_;
 
@@ -128,7 +136,7 @@ sub _parse {
     # Input must be defined
     #
     croak 'undefined input' unless defined $eslifRecognizer->input();
-    $log->debugf('[%2d] Input (10st characters): %s', $recognizerInterface->recurseLevel, substr($eslifRecognizer->input, 0, 10));
+    $log->debugf('[%2d] Input before first scan (10st characters):', $recognizerInterface->recurseLevel);
 
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
@@ -163,7 +171,9 @@ sub _parse {
     # ------------------------
     # Return the value
     # ------------------------
-    return $valueInterface->getResult;
+    my $rc = $valueInterface->getResult;
+    $log->debugf('Result: %s', $rc);
+    return $rc;
 }
 
 sub _subLexicalParse {
@@ -181,8 +191,6 @@ sub _subLexicalParse {
             recurseLevel => $recurseLevel,
             grammar => $self->{grammars}->{$grammarName})};
     $log->debugf('[%2d] %s', $recurseLevel, $@) if $@;
-    $log->debugf('[%2d] rc=%s', $recurseLevel, $rc);
-
     return $rc;
 }
 
@@ -207,62 +215,73 @@ sub _lexicalEventManager {
     foreach my $lexeme (@lexemeExpected) {
         my $match = undef;
 
+        $log->debugf('[%2d] Lexeme try: %s', $recognizerInterface->recurseLevel, $lexeme);
+
         if ($lexeme eq 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD') {
             my $identifier_or_keyword = $self->_subLexicalParse('identifier_or_keyword', $eslifRecognizer, $recognizerInterface);
             my $keyword = defined($identifier_or_keyword) ? $self->_subLexicalParse('keyword', $eslifRecognizer, $recognizerInterface) : undef;
             $match = $identifier_or_keyword if defined($identifier_or_keyword) && ! defined($keyword);
+            $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
         }
         elsif ($lexeme eq 'ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE') {
             my $identifier_or_keyword = $self->_subLexicalParse('identifier_or_keyword', $eslifRecognizer, $recognizerInterface);
             my $true_or_false = defined($identifier_or_keyword) ? ($eslifRecognizer->lexemeTry($TRUE) || $eslifRecognizer->lexemeTry($FALSE)) : undef;
             $match = $identifier_or_keyword if defined($identifier_or_keyword) && ! defined($true_or_false);
+            $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
         }
-        elsif ($lexeme eq 'CHARACTER 005F') {
+        elsif ($lexeme eq 'ESCAPED CHARACTER 005F') {
             if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence eq "\x{005f}";
+                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
-        elsif ($lexeme eq 'CHARACTER OF CLASSES Lu Ll Lt Lm Lo OR Nl') {
+        elsif ($lexeme eq 'ESCAPED CHARACTER OF CLASSES Lu Ll Lt Lm Lo OR Nl') {
             if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]$/;
+                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
-        elsif ($lexeme eq 'CHARACTER OF CLASSES Mn OR Mc') {
+        elsif ($lexeme eq 'ESCAPED CHARACTER OF CLASSES Mn OR Mc') {
             if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Mn}\p{Mc}]$/;
+                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
-        elsif ($lexeme eq 'CHARACTER OF THE CLASS Nd') {
+        elsif ($lexeme eq 'ESCAPED CHARACTER OF THE CLASS Nd') {
             if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Nd}]$/;
+                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
-        elsif ($lexeme eq 'CHARACTER OF THE CLASS Pc') {
+        elsif ($lexeme eq 'ESCAPED CHARACTER OF THE CLASS Pc') {
             if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Pc}]$/;
+                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
-        elsif ($lexeme eq 'CHARACTER OF THE CLASS Cf') {
+        elsif ($lexeme eq 'ESCAPED CHARACTER OF THE CLASS Cf') {
             if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Cf}]$/;
+                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
         elsif ($lexeme eq 'TRUE' || $lexeme eq 'FALSE') {
             if ($eslifRecognizer->lexemeTry($lexeme)) {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($lexeme) || croak "$lexeme is undef";
                 $match = $utf8bytes;
+                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
         else {
@@ -298,6 +317,7 @@ sub _lexicalEventManager {
 
 __DATA__
 __[ lexical ]__
+:default ::= action => ::convert[UTF-8]
 #
 # 7.3 Lexical analysis
 # ====================
@@ -374,7 +394,7 @@ __[ lexical ]__
 #
 # 7.3.4 White space
 # -----------------
-<whitespace>           ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/                      name => 'whitespace'
+<whitespace>           ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u                     name => 'whitespace'
 
 #
 # 7.4 Tokens
@@ -418,15 +438,15 @@ __[ lexical ]__
                                                             | <connecting character>                                                               name => 'identifier part character (3)'
                                                             | <combining character>                                                                name => 'identifier part character (4)'
                                                             | <formatting character>                                                               name => 'identifier part character (5)'
-<letter character>                                        ::= /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/                                             name => 'letter character (1)'
+<letter character>                                        ::= /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/u                                            name => 'letter character (1)'
                                                             | <A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl> name => 'letter character (2)'
-<combining character>                                     ::= /[\p{Mn}\p{Mc}]/                                                                     name => 'combining character (1)'
+<combining character>                                     ::= /[\p{Mn}\p{Mc}]/u                                                                    name => 'combining character (1)'
                                                             | <A unicode escape sequence representing a character of classes Mn or Mc>             name => 'combining character (2)'
-<decimal digit character>                                 ::= /[\p{Nd}]/                                                                           name => 'decimal digit character (1)'
+<decimal digit character>                                 ::= /[\p{Nd}]/u                                                                          name => 'decimal digit character (1)'
                                                             | <A unicode escape sequence representing a character of the class Nd>                 name => 'decimal digit character (2)'
-<connecting character>                                    ::= /[\p{Pc}]/                                                                           name => 'connecting character (1)'
+<connecting character>                                    ::= /[\p{Pc}]/u                                                                          name => 'connecting character (1)'
                                                             | <A unicode escape sequence representing a character of the class Pc>                 name => 'connecting character (2)'
-<formatting character>                                    ::= /[\p{Cf}]/                                                                           name => 'formatting character (1)'
+<formatting character>                                    ::= /[\p{Cf}]/u                                                                          name => 'formatting character (1)'
                                                             | <A unicode escape sequence representing a character of the class Cf>                 name => 'formatting character (2)'
 
 #
@@ -810,23 +830,23 @@ keyword ::= 'abstract'                    name => 'keyword (1)'
 # Lexemes
 #
 <An identifier or keyword that is not a keyword>                                     ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
-<A unicode escape sequence representing the character 005f>                          ::= <CHARACTER 005F>
-<A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl> ::= <CHARACTER OF CLASSES Lu Ll Lt Lm Lo OR Nl>
-<A unicode escape sequence representing a character of classes Mn or Mc>             ::= <CHARACTER OF CLASSES Mn OR Mc>
-<A unicode escape sequence representing a character of the class Nd>                 ::= <CHARACTER OF THE CLASS Nd>
-<A unicode escape sequence representing a character of the class Pc>                 ::= <CHARACTER OF THE CLASS Pc>
-<A unicode escape sequence representing a character of the class Cf>                 ::= <CHARACTER OF THE CLASS Cf>
+<A unicode escape sequence representing the character 005f>                          ::= <ESCAPED CHARACTER 005F>
+<A unicode escape sequence representing a character of classes Lu Ll Lt Lm Lo or Nl> ::= <ESCAPED CHARACTER OF CLASSES Lu Ll Lt Lm Lo OR Nl>
+<A unicode escape sequence representing a character of classes Mn or Mc>             ::= <ESCAPED CHARACTER OF CLASSES Mn OR Mc>
+<A unicode escape sequence representing a character of the class Nd>                 ::= <ESCAPED CHARACTER OF THE CLASS Nd>
+<A unicode escape sequence representing a character of the class Pc>                 ::= <ESCAPED CHARACTER OF THE CLASS Pc>
+<A unicode escape sequence representing a character of the class Cf>                 ::= <ESCAPED CHARACTER OF THE CLASS Cf>
 <Any identifier or keyword except true or false>                                     ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
 
 TRUE                                                                                 ~ 'true'
 FALSE                                                                                ~ 'false'
 <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>                                     ~ [^\s\S]     # Matches nothing
-<CHARACTER 005F>                                                                     ~ [^\s\S]     # Matches nothing
-<CHARACTER OF CLASSES Lu Ll Lt Lm Lo OR Nl>                                          ~ [^\s\S]     # Matches nothing
-<CHARACTER OF CLASSES Mn OR Mc>                                                      ~ [^\s\S]     # Matches nothing
-<CHARACTER OF THE CLASS Nd>                                                          ~ [^\s\S]     # Matches nothing
-<CHARACTER OF THE CLASS Pc>                                                          ~ [^\s\S]     # Matches nothing
-<CHARACTER OF THE CLASS Cf>                                                          ~ [^\s\S]     # Matches nothing
+<ESCAPED CHARACTER 005F>                                                             ~ [^\s\S]     # Matches nothing
+<ESCAPED CHARACTER OF CLASSES Lu Ll Lt Lm Lo OR Nl>                                  ~ [^\s\S]     # Matches nothing
+<ESCAPED CHARACTER OF CLASSES Mn OR Mc>                                              ~ [^\s\S]     # Matches nothing
+<ESCAPED CHARACTER OF THE CLASS Nd>                                                  ~ [^\s\S]     # Matches nothing
+<ESCAPED CHARACTER OF THE CLASS Pc>                                                  ~ [^\s\S]     # Matches nothing
+<ESCAPED CHARACTER OF THE CLASS Cf>                                                  ~ [^\s\S]     # Matches nothing
 <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>                                     ~ [^\s\S]     # Matches nothing
 
 #
@@ -840,8 +860,6 @@ event ^A_unicode_escape_sequence_representing_a_character_of_the_class_Nd       
 event ^A_unicode_escape_sequence_representing_a_character_of_the_class_Pc                 = predicted <A unicode escape sequence representing a character of the class Pc>
 event ^A_unicode_escape_sequence_representing_a_character_of_the_class_Cf                 = predicted <A unicode escape sequence representing a character of the class Cf>
 event ^Any_identifier_or_keyword_except_true_or_false                                     = predicted <Any identifier or keyword except true or false>
-event sub_grammar_completion$                                                             = completed <identifier or keyword>
-event sub_grammar_completion$                                                             = completed <keyword>
 
 <UNICODE ESCAPE SEQUENCE>   ~ /\\u[0-9A-Fa-f]{4}/
                             | /\\u[0-9A-Fa-f]{8}/
