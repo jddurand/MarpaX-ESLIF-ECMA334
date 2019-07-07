@@ -60,23 +60,18 @@ print STDERR "LEXICAL_GRAMMAR done\n";
 my $SYNTACTIC_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $SYNTACTIC_BNF);
 print STDERR "SYNTACTIC_GRAMMAR done\n";
 
-# Sub-lexical grammars
+# Sub-lexical grammars (no logger)
 my $IDENTIFIER_OR_KEYWORD_BNF = $LEXICAL_BNF;
 $IDENTIFIER_OR_KEYWORD_BNF .= "\n:start ::= <identifier or keyword>\n";
 $IDENTIFIER_OR_KEYWORD_BNF .= "\nevent sub_grammar_completion\$ = completed <identifier or keyword>\n";
-my $IDENTIFIER_OR_KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $IDENTIFIER_OR_KEYWORD_BNF);
+my $IDENTIFIER_OR_KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $IDENTIFIER_OR_KEYWORD_BNF);
 print STDERR "IDENTIFIER_OR_KEYWORD_GRAMMAR done\n";
 
 my $KEYWORD_BNF = $LEXICAL_BNF;
 $KEYWORD_BNF .= "\n:start ::= <keyword>\n";
 $KEYWORD_BNF .= "\nevent sub_grammar_completion\$ = completed <keyword>\n";
-my $KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $KEYWORD_BNF);
+my $KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $KEYWORD_BNF);
 print STDERR "KEYWORD_GRAMMAR done\n";
-
-my $UNICODE_ESCAPE_SEQUENCE_BNF = $LEXICAL_BNF;
-$UNICODE_ESCAPE_SEQUENCE_BNF .= "\n:start ::= <unicode escape sequence>\n";
-my $UNICODE_ESCAPE_SEQUENCE_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $UNICODE_ESCAPE_SEQUENCE_BNF);
-print STDERR "UNICODE_ESCAPE_SEQUENCE_GRAMMAR done\n";
 
 my $UNICODE_ESCAPE_SEQUENCE = 'UNICODE ESCAPE SEQUENCE';
 my $TRUE = 'TRUE';
@@ -84,6 +79,7 @@ my $FALSE = 'FALSE';
 my $lexicalValue = MarpaX::ESLIF::ECMA334::Lexical::ValueInterface->new();
 
 $Log::Log4perl::Logger::APPENDER_BY_NAME{Screen}->threshold($TRACE);
+
 sub new {
     my ($pkg) = @_;
 
@@ -93,7 +89,6 @@ sub new {
             syntactic => $SYNTACTIC_GRAMMAR,
             identifier_or_keyword => $IDENTIFIER_OR_KEYWORD_GRAMMAR,
             keyword => $KEYWORD_GRAMMAR,
-            unicode_escape_sequence => $UNICODE_ESCAPE_SEQUENCE_GRAMMAR,
             can_comment => 1,                     # At start it is true
             can_single_line_comment => 1,         # At start it is true
             can_delimited_comment => 1            # At start it is true
@@ -104,13 +99,13 @@ sub new {
 sub lexicalParse {
     my ($self, %options) = @_;
 
-    return $self->_parse($options{grammar} // $self->{grammars}->{lexical},
+    my $grammar = delete($options{grammar}) // $self->{grammars}->{lexical};
+
+    return $self->_parse($grammar,
                          'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
                          'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
                          \&_lexicalEventManager,
-                         input => $options{input}, # May be undef
-                         encoding => $options{encoding},
-                         recurseLevel => $options{recurseLevel}
+                         %options
         );
 }
 
@@ -136,7 +131,6 @@ sub _parse {
     # Input must be defined
     #
     croak 'undefined input' unless defined $eslifRecognizer->input();
-    $log->debugf('[%2d] Input before first scan (10st characters):', $recognizerInterface->recurseLevel);
 
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
@@ -153,8 +147,7 @@ sub _parse {
                     if ($recognizerInterface->hasCompletion && $recognizerInterface->recurseLevel) {
                         last;
                     } else {
-                        $log->debugf('[%2d] resume failed, hasCompletion: %d', $recognizerInterface->recurseLevel, $recognizerInterface->hasCompletion);
-                        croak 'resume failed';
+                        croak 'resume() failed';
                     }
                 }
                 $self->$eventManager($eslifRecognizer, $recognizerInterface)
@@ -172,7 +165,6 @@ sub _parse {
     # Return the value
     # ------------------------
     my $rc = $valueInterface->getResult;
-    $log->debugf('Result: %s', $rc);
     return $rc;
 }
 
@@ -180,25 +172,46 @@ sub _subLexicalParse {
     my ($self, $grammarName, $eslifRecognizer, $recognizerInterface) = @_;
 
     my $recurseLevel = $recognizerInterface->recurseLevel + 1;
-    #
-    # Prepare a $grammar_name recognizer that start where is current $eslifRecognizer
-    #
-    $log->debugf('[%2d] Sub grammar: %s', $recurseLevel, $grammarName);
-    my $rc = eval {
-        $self->lexicalParse(
-            input => $eslifRecognizer->input,
-            encoding => $recognizerInterface->encoding,
-            recurseLevel => $recurseLevel,
-            grammar => $self->{grammars}->{$grammarName})};
-    $log->debugf('[%2d] %s', $recurseLevel, $@) if $@;
+    my $input = $eslifRecognizer->input;
+    my $rc;
+
+    if (defined($input)) {
+        #
+        # Prepare a $grammar_name recognizer that start where is current $eslifRecognizer
+        #
+        $log->debugf('[%2d] Sub-grammar %s start', $recurseLevel, $grammarName);
+        use Devel::Hexdump 'xd';
+        foreach (split/\R/, xd($eslifRecognizer->input)) {
+            $log->debugf('[%2d] Input: %s', $recurseLevel, $_);
+        }
+        $rc = eval {
+            $self->lexicalParse(
+                input => $eslifRecognizer->input,
+                encoding => $recognizerInterface->encoding,
+                recurseLevel => $recurseLevel,
+                exhaustion => 1,
+                grammar => $self->{grammars}->{$grammarName})};
+        if (! defined($rc)) {
+            if ($@) {
+                $log->debugf('[%2d] Sub-grammar %s failure, %s', $recurseLevel, $grammarName, $@);
+            } else {
+                $log->debugf('[%2d] Sub-grammar %s failure', $recurseLevel, $grammarName);
+            }
+        } else {
+            $log->debugf('[%2d] Sub-grammar %s success: %s', $recurseLevel, $grammarName, $rc);
+        }
+    } else {
+        $log->debugf('[%2d] Sub-grammar %s failure, undefined input', $recurseLevel, $grammarName);
+    }
+
     return $rc;
 }
 
 sub _lexicalEventManager {
     my ($self, $eslifRecognizer, $recognizerInterface) = @_;
 
+    $log->debugf('[%2d] Sub-grammar event manager', $recognizerInterface->recurseLevel);
     my @lexemeExpected = @{$eslifRecognizer->lexemeExpected()};
-    $log->debugf('[%2d] Expected: %s', $recognizerInterface->recurseLevel, join(', ', @lexemeExpected));
 
     #
     # Sub-grammar completion ?
@@ -215,26 +228,23 @@ sub _lexicalEventManager {
     foreach my $lexeme (@lexemeExpected) {
         my $match = undef;
 
-        $log->debugf('[%2d] Lexeme try: %s', $recognizerInterface->recurseLevel, $lexeme);
+        $log->debugf('[%2d] Try: %s', $recognizerInterface->recurseLevel, $lexeme);
 
         if ($lexeme eq 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD') {
             my $identifier_or_keyword = $self->_subLexicalParse('identifier_or_keyword', $eslifRecognizer, $recognizerInterface);
             my $keyword = defined($identifier_or_keyword) ? $self->_subLexicalParse('keyword', $eslifRecognizer, $recognizerInterface) : undef;
             $match = $identifier_or_keyword if defined($identifier_or_keyword) && ! defined($keyword);
-            $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
         }
         elsif ($lexeme eq 'ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE') {
             my $identifier_or_keyword = $self->_subLexicalParse('identifier_or_keyword', $eslifRecognizer, $recognizerInterface);
             my $true_or_false = defined($identifier_or_keyword) ? ($eslifRecognizer->lexemeTry($TRUE) || $eslifRecognizer->lexemeTry($FALSE)) : undef;
             $match = $identifier_or_keyword if defined($identifier_or_keyword) && ! defined($true_or_false);
-            $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
         }
         elsif ($lexeme eq 'ESCAPED CHARACTER 005F') {
             if ($eslifRecognizer->lexemeTry($UNICODE_ESCAPE_SEQUENCE)) {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence eq "\x{005f}";
-                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
         elsif ($lexeme eq 'ESCAPED CHARACTER OF CLASSES Lu Ll Lt Lm Lo OR Nl') {
@@ -242,7 +252,6 @@ sub _lexicalEventManager {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]$/;
-                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
         elsif ($lexeme eq 'ESCAPED CHARACTER OF CLASSES Mn OR Mc') {
@@ -250,7 +259,6 @@ sub _lexicalEventManager {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Mn}\p{Mc}]$/;
-                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
         elsif ($lexeme eq 'ESCAPED CHARACTER OF THE CLASS Nd') {
@@ -258,7 +266,6 @@ sub _lexicalEventManager {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Nd}]$/;
-                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
         elsif ($lexeme eq 'ESCAPED CHARACTER OF THE CLASS Pc') {
@@ -266,7 +273,6 @@ sub _lexicalEventManager {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Pc}]$/;
-                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
         elsif ($lexeme eq 'ESCAPED CHARACTER OF THE CLASS Cf') {
@@ -274,14 +280,12 @@ sub _lexicalEventManager {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($UNICODE_ESCAPE_SEQUENCE) || croak "$UNICODE_ESCAPE_SEQUENCE is undef";
                 my $unicode_escape_sequence = $lexicalValue->unicode_escape_sequence($utf8bytes);
                 $match = $unicode_escape_sequence if $unicode_escape_sequence =~ /^[\p{Cf}]$/;
-                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
         elsif ($lexeme eq 'TRUE' || $lexeme eq 'FALSE') {
             if ($eslifRecognizer->lexemeTry($lexeme)) {
                 my $utf8bytes = $eslifRecognizer->lexemeLastTry($lexeme) || croak "$lexeme is undef";
                 $match = $utf8bytes;
-                $log->debugf('[%2d] %s for lexeme %s', $recognizerInterface->recurseLevel, defined($match) ? "OK" : "KO", $lexeme);
             }
         }
         else {
@@ -292,7 +296,7 @@ sub _lexicalEventManager {
             #
             # A lexeme that we have to insert ourself
             #
-            $log->debugf('Match on: %s, length: %d bytes', $lexeme, bytes::length($match));
+            $log->debugf('[%2d] Match on: %s (length: %d bytes): %s', $recognizerInterface->recurseLevel, $lexeme, bytes::length($match), $match);
             $lexemes{$lexeme} = $match;
         }
     }
@@ -305,10 +309,10 @@ sub _lexicalEventManager {
         my $length = bytes::length($longestMatch);
         foreach my $lexeme (grep { bytes::length($lexemes{$_}) == $length} keys %lexemes) {
             my $match = $lexemes{$lexeme};
-            $log->debugf('lexemeAlternative: %s: %s', $lexeme, $match);
+            $log->debugf('[%2d] Lexeme alternative: %s: %s', $recognizerInterface->recurseLevel, $lexeme, $match);
             $eslifRecognizer->lexemeAlternative($lexeme, $match);
         }
-        $log->debugf('lexemeComplete on %d bytes', $length);
+        $log->debugf('[%2d] Lexeme complete on %d bytes', $recognizerInterface->recurseLevel, $length);
         $eslifRecognizer->lexemeComplete($length);
     }
 }
@@ -394,7 +398,7 @@ __[ lexical ]__
 #
 # 7.3.4 White space
 # -----------------
-<whitespace>           ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u                     name => 'whitespace'
+<whitespace>           ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u                    name => 'whitespace'
 
 #
 # 7.4 Tokens
