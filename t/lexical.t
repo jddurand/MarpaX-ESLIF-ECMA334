@@ -50,7 +50,7 @@ foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAG
 sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
-    my @r = $ecma334->lexicalParse(input => $input, encoding => $encoding);
+    my @r = $ecma334->parse(input => $input, encoding => $encoding);
 
     ok($want_ok ? scalar(@r) : !scalar(@r), $name);
 }

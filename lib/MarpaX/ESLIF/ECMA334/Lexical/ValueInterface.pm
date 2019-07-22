@@ -103,26 +103,10 @@ Sets the current parse tree value.
 
 sub setResult          { return $_[0]->{result} = $_[1] }
 
-=head3 unicode_escape_sequence
-
-unicode escape sequence with four or eigh digits
-
-=cut
-
-sub my_action {
-    my ($self, @args) = @_;
-
-    my $key = $MarpaX::ESLIF::Context::ruleName // $MarpaX::ESLIF::Context::symbolName;
-
-    return { $key => \@args }
-}
-
 =head1 SEE ALSO
 
 L<MarpaX::ESLIF::ECMA334>
 
 =cut
-
-
 
 1;

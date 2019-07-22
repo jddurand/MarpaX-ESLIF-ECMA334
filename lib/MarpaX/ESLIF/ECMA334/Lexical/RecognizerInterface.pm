@@ -127,11 +127,11 @@ sub isWithNewline          { $_[0]->{newline} // 1 } # Newline count ? Default i
 
 =head3 isWithTrack($self)
 
-Returns a true or a false value, indicating if absolute position tracking is on or off, respectively. Default is a false value.
+Returns a true or a false value, indicating if absolute position tracking is on or off, respectively. Default is a true value.
 
 =cut
 
-sub isWithTrack            { $_[0]->{track} // 0 } # Absolute position tracking ? Default is false.
+sub isWithTrack            { $_[0]->{track} // 1 } # Absolute position tracking ? Default is true.
 
 =head2 Additional methods
 
