@@ -47,7 +47,7 @@ This module parses C# language as per Standard ECMA-334 5th Edition.
 
 use Carp qw/croak/;
 use Data::Section -setup;
-use Encode qw/decode/;
+use Devel::Hexdump qw/xd/;
 use Log::Any qw/$log/;
 use MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface;
 use MarpaX::ESLIF::ECMA334::Lexical::ValueInterface;
@@ -64,9 +64,9 @@ my $PRE_LEXICAL_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), 
 $log->debug('pre lexical grammar compiled');
 my $LEXICAL_GRAMMAR     = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $LEXICAL_BNF);
 $log->debug('lexical grammar compiled');
-my $IDENTIFIER_OR_KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $IDENTIFIER_OR_KEYWORD_BNF);
+my $IDENTIFIER_OR_KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $IDENTIFIER_OR_KEYWORD_BNF); # No log
 $log->debug('identifier or keyword grammar compiled');
-my $KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $KEYWORD_BNF);
+my $KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $KEYWORD_BNF); # No log
 $log->debug('keyword grammar compiled');
 
 # ============================================================================
@@ -158,7 +158,6 @@ sub _parse {
     # ------------------------
     # Instanciate a recognizer
     # ------------------------
-    $log->debugf('MarpaX::ESLIF::Recognizer->new($grammar=%s, $recognizerInterface=%s)', $grammar, $recognizerInterface);
     my $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($grammar, $recognizerInterface);
 
     # -------------------------------------------------------------------------
@@ -206,45 +205,153 @@ sub _parse {
     return $rc;
 }
 
+sub _identifier_or_keyword {
+    my ($self, $eslifRecognizer, $recognizerInterface) = @_;
+
+    $log->debugf('[%2d] Trying grammar %s', $recognizerInterface->recurseLevel, '<identifier or keyword>');
+
+    my $identifier_or_keyword = eval {
+        $self->_parse($IDENTIFIER_OR_KEYWORD_GRAMMAR,
+                      'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
+                      'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
+                      \&_lexicalEventManager,
+                      input => $eslifRecognizer->input,
+                      recurseLevel => $recognizerInterface->recurseLevel + 1,
+                      exhaustion => 1,
+                      encoding => 'UTF-8');
+    };
+
+    if (defined($identifier_or_keyword)) {
+        $log->debugf('[%2d] Trying grammar %s: success: %s', $recognizerInterface->recurseLevel, '<identifier or keyword>', $identifier_or_keyword);
+    } else {
+        $log->debugf('[%2d] Trying grammar %s: failure', $recognizerInterface->recurseLevel, '<identifier or keyword>');
+    }
+
+    return $identifier_or_keyword;
+}
+
+sub _keyword {
+    my ($self, $eslifRecognizer, $recognizerInterface) = @_;
+
+    $log->debugf('[%2d] Trying grammar %s', $recognizerInterface->recurseLevel, '<keyword>');
+    
+    my $keyword = eval {
+        $self->_parse($KEYWORD_GRAMMAR,
+                      'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
+                      'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
+                      \&_lexicalEventManager,
+                      input => $eslifRecognizer->input,
+                      recurseLevel => $recognizerInterface->recurseLevel + 1,
+                      exhaustion => 1,
+                      encoding => 'UTF-8');
+    };
+
+    if (defined($keyword)) {
+        $log->debugf('[%2d] Trying grammar %s: success: %s', $recognizerInterface->recurseLevel, '<keyword>', $keyword);
+    } else {
+        $log->debugf('[%2d] Trying grammar %s: failure', $recognizerInterface->recurseLevel, '<keyword>');
+    }
+
+    return $keyword;
+}
+
+sub _error {
+    my ($self, $fmt, @args) = @_;
+
+    $log->debugf($fmt, @args);
+    croak sprintf($fmt, @args);
+}
+
 sub _lexicalEventManager {
     my ($self, $eslifRecognizer, $recognizerInterface) = @_;
 
-    foreach (@{$eslifRecognizer->events}) {
-	my $event = $_->{event} // '';
-        my $match = undef;
-	my $lexeme = undef;
+    foreach (split/\R/, xd($eslifRecognizer->input // '')) {
+        $log->debugf('[%2d] Input: %s', $recognizerInterface->recurseLevel, $_);
+        last;
+    }
 
-        if ($event eq 'not_a_keyword[]') {
-            my ($offset, $length) = $eslifRecognizer->lastCompletedLocation('an identifier or keyword that is not a keyword');
-            my $identifier_or_keyword = decode('UTF-8', bytes::substr($recognizerInterface->data, $offset, $length), Encode::FB_CROAK);
-            my $keyword = eval {
-                $self->_parse($KEYWORD_GRAMMAR,
-                              'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
-                              'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
-                              \&_lexicalEventManager,
-                              input => $identifier_or_keyword,
-                              encoding => 'UTF-8');
-            };
-	    croak "$identifier_or_keyword: a keyword is not allowed" if defined($keyword);
-	    $log->debugf('[%2d] $identifier_or_keyword=%s: ok, not a keyword', $recognizerInterface->recurseLevel, $identifier_or_keyword);
+    my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
+    $log->infof('[%2d] Events: %s', $recognizerInterface->recurseLevel, \@events);
+
+    #
+    # At any predicted event, we have two possible sub-grammars
+    #
+    my $identifier_or_keyword;
+    my $keyword;
+    my @matches;
+    my $latm = 0;
+
+    foreach my $event (@events) {
+        my $match = undef;
+	my $name = undef;
+
+        if ($event eq '^available_identifier') {
+            $identifier_or_keyword //= $self->_identifier_or_keyword($eslifRecognizer, $recognizerInterface);
+            if (defined($identifier_or_keyword)) {
+                $keyword //= $self->_keyword($eslifRecognizer, $recognizerInterface);
+                if (! defined($keyword)) {
+                    $match = $identifier_or_keyword;
+                    $name = 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD';
+                }
+            }
         }
-        elsif ($event eq 'not_a_boolean_literal[]') {
-            # We want to verify that <identifier or keyword> is not a 'true' or 'false'
-            #
-            my ($offset, $length) = $eslifRecognizer->lastCompletedLocation('any identifier or keyword except true or false');
-            my $identifier_or_keyword = decode('UTF-8', bytes::substr($recognizerInterface->data, $offset, $length), Encode::FB_CROAK);
-	    croak "$identifier_or_keyword: true or false is not allowed" if ($identifier_or_keyword eq 'true' or $identifier_or_keyword eq 'false');
-	    $log->debugf('[%2d] $identifier_or_keyword=%s: ok, not true or false', $recognizerInterface->recurseLevel, $identifier_or_keyword);
+        elsif ($event eq '^keyword') {
+            $keyword //= $self->_keyword($eslifRecognizer, $recognizerInterface);
+            if (defined($keyword)) {
+                $match = $keyword;
+                $name = 'KEYWORD';
+            }
+        }
+        elsif ($event eq '^identifier_or_keyword') {
+            $identifier_or_keyword //= $self->_identifier_or_keyword($eslifRecognizer, $recognizerInterface);
+            if (defined($identifier_or_keyword)) {
+                $match = $identifier_or_keyword;
+                $name = 'IDENTIFIER OR KEYWORD';
+            }
+        }
+        elsif ($event eq '^conditional_symbol') {
+            $identifier_or_keyword //= $self->_identifier_or_keyword($eslifRecognizer, $recognizerInterface);
+            if (defined($identifier_or_keyword)) {
+                if ($identifier_or_keyword ne 'true' && $identifier_or_keyword ne 'false') {
+                    $match = $identifier_or_keyword;
+                    $name = 'ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE';
+                }
+            }
+        }
+        elsif ($event eq "'exhausted'") {
+	    $log->infof('[%2d] Completion event', $recognizerInterface->recurseLevel);
+            $recognizerInterface->hasCompletion(1);
         }
         else {
-            croak "Unsupported event $event";
+	    $self->_error('[%2d] Unsupported event %s', $recognizerInterface->recurseLevel, $event);
         }
 
 	if (defined($match)) {
-	    $log->debugf('[%2d] Lexeme read: %s: %s (%d bytes)', $recognizerInterface->recurseLevel, $lexeme, $match, bytes::length($match));
-	    $eslifRecognizer->lexemeRead($lexeme, $match, bytes::length($match));
-	}
+            $log->infof('[%2d] Event %s matches lexeme %s: %s', $recognizerInterface->recurseLevel, $event, $name, $match);
+            my $length = bytes::length($match);
+            if ($length >= $latm) {
+                if ($length > $latm) {
+                    @matches = ();
+                    $latm = $length;
+                }
+                push(@matches, { match => $match, name => $name });
+            }
+        } else {
+            $log->infof('[%2d] Event %s matches no lexeme', $recognizerInterface->recurseLevel, $event);
+        }
     }
+
+    if ($latm) {
+        foreach (@matches) {
+	    $log->debugf('[%2d] Lexeme alternative: %s: %s', $recognizerInterface->recurseLevel, $_->{name}, $_->{match});
+            $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{match})
+        }
+        $log->debugf('[%2d] Lexeme complete on %d bytes', $recognizerInterface->recurseLevel, $latm);
+        $self->_error('lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
+        $log->infof('[%2d] Events: no lexeme', $recognizerInterface->recurseLevel, \@events);
+    }
+
+    $log->infof('[%2d] Events: %d matches', $recognizerInterface->recurseLevel, \@events, scalar(@matches));
 }
 
 1;
@@ -325,111 +432,14 @@ __[ lexical ]__
 <identifier> ::= <available identifier>
                | '@' <identifier or keyword>
 
-<available identifier>  ::= <an identifier or keyword that is not a keyword>
-event not_a_keyword[] = nulled <not a keyword>
-<an identifier or keyword that is not a keyword> ::= <identifier or keyword> <not a keyword>
-<not a keyword> ::=
-<identifier or keyword> ::= <identifier start character> <identifier part characters opt>
-<identifier part characters opt> ::=
-<identifier part characters opt> ::= <identifier part characters>
-<identifier start character> ::= <letter character>
-                               | <underscore character>
-<underscore character>       ::= '_' # The underscore character U+005F
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>
-<identifier part characters> ::= <identifier part character>+
-<identifier part character>  ::= <letter character>
-                               | <decimal digit character>
-                               | <connecting character>
-                               | <combining character>
-                               | <formatting character>
-<letter character>           ::= /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/u
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Lu Ll Lt Lm Lo or Nl>
-<combining character>        ::= /[\p{Mn}\p{Mc}]/u
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Mn or Mc>
-<decimal digit character>    ::= /[\p{Nd}]/u
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Nd>
-<connecting character>       ::= /[\p{Pc}]/u
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Pc>
-<formatting character>       ::= /[\p{Cf}]/u
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Cf>
+event ^identifier_or_keyword = predicted <identifier or keyword>
+<identifier or keyword> ::= <IDENTIFIER OR KEYWORD>
 
-<keyword> ::= 'abstract'
-            | 'byte'
-            | 'class'
-            | 'delegate'
-            | 'event'
-            | 'fixed'
-            | 'if'
-            | 'internal'
-            | 'new'
-            | 'override'
-            | 'readonly'
-            | 'short'
-            | 'struct'
-            | 'try'
-            | 'unsafe'
-            | 'volatile'
-            | 'as'
-            | 'case'
-            | 'const'
-            | 'do'
-            | 'explicit'
-            | 'float'
-            | 'implicit'
-            | 'is'
-            | 'null'
-            | 'params'
-            | 'ref'
-            | 'sizeof'
-            | 'switch'
-            | 'typeof'
-            | 'ushort'
-            | 'while'
-            | 'base'
-            | 'catch'
-            | 'continue'
-            | 'double'
-            | 'extern'
-            | 'for'
-            | 'in'
-            | 'lock'
-            | 'object'
-            | 'private'
-            | 'return'
-            | 'stackalloc'
-            | 'this'
-            | 'uint'
-            | 'using'
-            | 'bool'
-            | 'char'
-            | 'decimal'
-            | 'else'
-            | 'false'
-            | 'foreach'
-            | 'int'
-            | 'long'
-            | 'operator'
-            | 'protected'
-            | 'sbyte'
-            | 'static'
-            | 'throw'
-            | 'ulong'
-            | 'virtual'
-            | 'break'
-            | 'checked'
-            | 'default'
-            | 'enum'
-            | 'finally'
-            | 'goto'
-            | 'interface'
-            | 'namespace'
-            | 'out'
-            | 'public'
-            | 'sealed'
-            | 'string'
-            | 'true'
-            | 'unchecked'
-            | 'void'
+event ^available_identifier = predicted <available identifier>
+<available identifier>  ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
+
+event ^keyword = predicted <keyword>
+<keyword> ::= <KEYWORD>
 
 <contextual keyword> ::= 'add'
                        | 'by'
@@ -606,11 +616,8 @@ event not_a_keyword[] = nulled <not a keyword>
                  | <pp region>
                  | <pp pragma>
 
-event ^conditional_symbol  = predicted <conditional symbol>
-<conditional symbol> ::= <any identifier or keyword except true or false>
-event not_a_boolean_literal[] = nulled <not a boolean literal>
-<any identifier or keyword except true or false> ::= <identifier or keyword> <not a boolean literal>
-<not a boolean literal> ::=
+event ^conditional_symbol = predicted <conditional symbol>
+<conditional symbol> ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
 <pp expression> ::= <whitespace opt> <pp or expression> <whitespace opt>
 <whitespace opt> ::=
 <whitespace opt> ::= <whitespace>
@@ -680,26 +687,10 @@ event not_a_boolean_literal[] = nulled <not a boolean literal>
 #
 # Lexemes
 #
-<UNICODE ESCAPE SEQUENCE> :[2]:= /\\u[0-9A-Fa-f]{4}/
-                               | /\\U[0-9A-Fa-f]{8}/
+<KEYWORD>                                                                            ~ /[^\s\S]/ # Matches nothing
+<IDENTIFIER OR KEYWORD>                                                              ~ /[^\s\S]/ # Matches nothing
 <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>                                     ~ /[^\s\S]/ # Matches nothing
 <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>                                     ~ /[^\s\S]/ # Matches nothing
-
-<A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>                          ~ <UNICODE ESCAPE SEQUENCE>
-<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Lu Ll Lt Lm Lo or Nl> ~ <UNICODE ESCAPE SEQUENCE>
-<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Mn or Mc>             ~ <UNICODE ESCAPE SEQUENCE>
-<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Nd>                   ~ <UNICODE ESCAPE SEQUENCE>
-<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Pc>                   ~ <UNICODE ESCAPE SEQUENCE>
-<A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Cf>                   ~ <UNICODE ESCAPE SEQUENCE>
-
-:lexeme ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>                          if-action => A_unicode_escape_sequence_representing_the_character_005f
-:lexeme ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Lu Ll Lt Lm Lo or Nl> if-action => A_unicode_escape_sequence_representing_a_character_of_classes_Lu_Ll_Lt_Lm_Lo_or_Nl
-:lexeme ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Mn or Mc>             if-action => A_unicode_escape_sequence_representing_a_character_of_classes_Mn_or_Mc
-:lexeme ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Nd>                   if-action => A_unicode_escape_sequence_representing_a_character_of_the_class_Nd
-:lexeme ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Pc>                   if-action => A_unicode_escape_sequence_representing_a_character_of_the_class_Pc
-:lexeme ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Cf>                   if-action => A_unicode_escape_sequence_representing_a_character_of_the_class_Cf
-
-ERROR ~ /[^\s\S]/ # Matches nothing
 
 __[ identifier or keyword ]__
 :default ::= action => ::convert[UTF-8]
