@@ -109,4 +109,11 @@ L<MarpaX::ESLIF::ECMA334>
 
 =cut
 
+sub my_action {
+    my ($self, @args) = @_;
+
+    return { ruleName => $MarpaX::ESLIF::Context::ruleName,
+             what => [ @args ] };
+}
+
 1;

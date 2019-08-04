@@ -51,7 +51,7 @@ use Devel::Hexdump qw/xd/;
 use Log::Any qw/$log/;
 use MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface;
 use MarpaX::ESLIF::ECMA334::Lexical::ValueInterface;
-use MarpaX::ESLIF 3.0.13; # if-action
+use MarpaX::ESLIF 3.0.15; # if-action
 
 $Log::Log4perl::Logger::APPENDER_BY_NAME{Screen}->threshold($TRACE);
 
@@ -201,8 +201,7 @@ sub _parse {
     # ------------------------
     # Return the value
     # ------------------------
-    my $rc = $valueInterface->getResult;
-    return $rc;
+    return $valueInterface->getResult;
 }
 
 sub _identifier_or_keyword {
@@ -271,19 +270,16 @@ sub _lexicalEventManager {
     }
 
     my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
-    $log->infof('[%2d] Events: %s', $recognizerInterface->recurseLevel, \@events);
+    $log->debugf('[%2d] Events: %s', $recognizerInterface->recurseLevel, \@events);
 
     #
     # At any predicted event, we have two possible sub-grammars
     #
-    my $identifier_or_keyword;
-    my $keyword;
     my @matches;
     my $latm = 0;
 
     foreach my $event (@events) {
-        my $match = undef;
-	my $name = undef;
+        my ($identifier_or_keyword, $keyword, $match, $name) = (undef, undef, undef, undef);
 
         if ($event eq '^available_identifier') {
             $identifier_or_keyword //= $self->_identifier_or_keyword($eslifRecognizer, $recognizerInterface);
@@ -319,7 +315,7 @@ sub _lexicalEventManager {
             }
         }
         elsif ($event eq "'exhausted'") {
-	    $log->infof('[%2d] Completion event', $recognizerInterface->recurseLevel);
+	    $log->debugf('[%2d] Completion event', $recognizerInterface->recurseLevel);
             $recognizerInterface->hasCompletion(1);
         }
         else {
@@ -327,7 +323,7 @@ sub _lexicalEventManager {
         }
 
 	if (defined($match)) {
-            $log->infof('[%2d] Event %s matches lexeme %s: %s', $recognizerInterface->recurseLevel, $event, $name, $match);
+            $log->debugf('[%2d] Event %s matches lexeme %s: %s', $recognizerInterface->recurseLevel, $event, $name, $match);
             my $length = bytes::length($match);
             if ($length >= $latm) {
                 if ($length > $latm) {
@@ -337,7 +333,7 @@ sub _lexicalEventManager {
                 push(@matches, { match => $match, name => $name });
             }
         } else {
-            $log->infof('[%2d] Event %s matches no lexeme', $recognizerInterface->recurseLevel, $event);
+            $log->debugf('[%2d] Event %s matches no lexeme', $recognizerInterface->recurseLevel, $event);
         }
     }
 
@@ -348,10 +344,10 @@ sub _lexicalEventManager {
         }
         $log->debugf('[%2d] Lexeme complete on %d bytes', $recognizerInterface->recurseLevel, $latm);
         $self->_error('lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
-        $log->infof('[%2d] Events: no lexeme', $recognizerInterface->recurseLevel, \@events);
+        $log->debugf('[%2d] Events: no lexeme', $recognizerInterface->recurseLevel, \@events);
     }
 
-    $log->infof('[%2d] Events: %d matches', $recognizerInterface->recurseLevel, \@events, scalar(@matches));
+    $log->debugf('[%2d] Events: %d matches', $recognizerInterface->recurseLevel, \@events, scalar(@matches));
 }
 
 1;
@@ -364,6 +360,7 @@ __[ pre lexical ]__
 <input> ::= /./su *
 
 __[ lexical ]__
+# :default ::= action => my_action # ::convert[UTF-8]
 :default ::= action => ::convert[UTF-8]
 :desc ::= 'Lexical grammar'
 :discard ::= <comment>
@@ -387,18 +384,10 @@ __[ lexical ]__
 <input element>        ::= <whitespace>
                          | <token>
 
-<new line> ::= /\x{000D}/                     # Carriage return character
-             | /\x{000A}/                     # Line feed character
-             | /\x{000D}\x{000A}/             # Carriage return character followed by line feed character
-             | /\x{0085}/                     # Next line character
-             | /\x{2028}/u                    # Line separator character
-             | /\x{2029}/u                    # Paragraph separator character
+<new line> ::= /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
 
-<whitespace>           ::= <whitespace character>+
-<whitespace character> ::= /\p{Zs}/u                      # Any character with Unicode class Zs
-                         | /\x{0009}/                     # Horizontal tab character
-                         | /\x{000B}/                     # Vertical tab character
-                         | /\x{000C}/                     # Form feed character
+# :discard ::= <whitespace> # event => discard_whitespace$
+<whitespace>           ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u
 
 <comment>                    ::= <single line comment>
                                | <delimited comment>
@@ -436,6 +425,7 @@ event ^identifier_or_keyword = predicted <identifier or keyword>
 <identifier or keyword> ::= <IDENTIFIER OR KEYWORD>
 
 event ^available_identifier = predicted <available identifier>
+<available identifier> ::= /\w+/
 <available identifier>  ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
 
 event ^keyword = predicted <keyword>
@@ -483,18 +473,9 @@ event ^keyword = predicted <keyword>
 <decimal integer literal> ::= <decimal digits> <integer type suffix opt>
 <integer type suffix opt> ::=
 <integer type suffix opt> ::= <integer type suffix>
-<decimal digits> ::= <decimal digit>+
-<decimal digit> ::= /[0-9]/
-<integer type suffix> ::= 'U'
-                        | 'u'
-                        | 'L'
-                        | 'l'
-                        | 'UL'
-                        | 'Ul'
-                        | 'uL'
-                        | 'ul'
-<hexadecimal integer literal> ::= '0x' <hex digits> <integer type suffix opt>
-                                | '0X' <hex digits> <integer type suffix opt>
+<decimal digits> ::= /[0-9]+/
+<integer type suffix> ::= /U|L|UL/i
+<hexadecimal integer literal> ::= '0x':i <hex digits> <integer type suffix opt>
 <hex digits> ::= <hex digit>+
 <hex digit> ::= /[0-9A-Fa-f]/
 
@@ -502,19 +483,17 @@ event ^keyword = predicted <keyword>
                  |                  '.' <decimal digits> <exponent part opt> <real type suffix opt>
                  |                      <decimal digits> <exponent part>     <real type suffix opt>
                  |                      <decimal digits>                     <real type suffix>
-<exponent part> ::= 'e' <sign opt> <decimal digits>
-                  | 'E' <sign opt> <decimal digits>
+<exponent part> ::= 'E':i <sign opt> <decimal digits>
 <sign opt> ::=
 <sign opt> ::= <sign>
-<sign> ::= '+'
-         | '-'
+<sign> ::= /[+-]/
 
 <exponent part opt> ::=
 <exponent part opt> ::= <exponent part>
 <real type suffix opt> ::=
 <real type suffix opt> ::= <real type suffix>
 
-<real type suffix> ::= /[FfDdMm]/
+<real type suffix> ::= /[FDM]/i
 
 <character literal> ::= "'" <character> "'"
 <character> ::= <single character>
