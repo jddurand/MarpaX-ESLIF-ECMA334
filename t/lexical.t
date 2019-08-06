@@ -51,6 +51,10 @@ sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
     my @r = $ecma334->parse(input => $input, encoding => $encoding);
+    if ($want_ok && @r) {
+        use Data::Scan::Printer;
+        dspp($r[0])
+    }
 
     ok($want_ok ? scalar(@r) : !scalar(@r), $name);
 }

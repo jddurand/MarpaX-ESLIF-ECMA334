@@ -361,7 +361,7 @@ __[ pre lexical ]__
 
 __[ lexical ]__
 # :default ::= action => my_action # ::convert[UTF-8]
-:default ::= action => ::convert[UTF-8]
+:default ::= action => ::ast symbol-action => ::convert[UTF-8]
 :desc ::= 'Lexical grammar'
 :discard ::= <comment>
 
