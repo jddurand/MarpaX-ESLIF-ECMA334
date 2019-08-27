@@ -69,7 +69,11 @@ __[ 001 ok / single line comment ]__
 // A Hello World! program in C#.
 using System;
 {
-    x;}
+    string swedishumlaut = "Å"; // U+00C5
+    string angstromsign = "Å"; // U+212B
+    string money = "€"; // U+20AC
+    string sameThing = "\u20AC";
+}
 __[002 ok / example ]__
 using System;
 using Netica;
