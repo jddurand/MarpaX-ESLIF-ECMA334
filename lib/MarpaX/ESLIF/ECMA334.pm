@@ -114,7 +114,7 @@ sub _preparse {
     my $output = $input;
     if (bytes::length($input)) {
         #
-        # Pre-parse: we require this is a valid source file from encoding point
+        # Pre-parse: we require this is a valid source file from encoding point of view
         #
         my $recognizerInterface = MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface->new(input => $input, encoding => $encoding);
         my $valueInterface = MarpaX::ESLIF::ECMA334::Lexical::ValueInterface->new();
@@ -207,7 +207,7 @@ sub _parse {
 sub _identifier_or_keyword {
     my ($self, $eslifRecognizer, $recognizerInterface) = @_;
 
-    $log->debugf('[%2d] Trying grammar %s', $recognizerInterface->recurseLevel, '<identifier or keyword>');
+    # $log->debugf('[%2d] Trying grammar %s', $recognizerInterface->recurseLevel, '<identifier or keyword>');
 
     my $identifier_or_keyword = eval {
         $self->_parse($IDENTIFIER_OR_KEYWORD_GRAMMAR,
@@ -220,11 +220,11 @@ sub _identifier_or_keyword {
                       encoding => 'UTF-8');
     };
 
-    if (defined($identifier_or_keyword)) {
-        $log->debugf('[%2d] Trying grammar %s: success: %s', $recognizerInterface->recurseLevel, '<identifier or keyword>', $identifier_or_keyword);
-    } else {
-        $log->debugf('[%2d] Trying grammar %s: failure', $recognizerInterface->recurseLevel, '<identifier or keyword>');
-    }
+    # if (defined($identifier_or_keyword)) {
+    #     $log->debugf('[%2d] Trying grammar %s: success: %s', $recognizerInterface->recurseLevel, '<identifier or keyword>', $identifier_or_keyword);
+    # } else {
+    #     $log->debugf('[%2d] Trying grammar %s: failure', $recognizerInterface->recurseLevel, '<identifier or keyword>');
+    # }
 
     return $identifier_or_keyword;
 }
@@ -232,7 +232,7 @@ sub _identifier_or_keyword {
 sub _keyword {
     my ($self, $eslifRecognizer, $recognizerInterface) = @_;
 
-    $log->debugf('[%2d] Trying grammar %s', $recognizerInterface->recurseLevel, '<keyword>');
+    # $log->debugf('[%2d] Trying grammar %s', $recognizerInterface->recurseLevel, '<keyword>');
     
     my $keyword = eval {
         $self->_parse($KEYWORD_GRAMMAR,
@@ -245,11 +245,11 @@ sub _keyword {
                       encoding => 'UTF-8');
     };
 
-    if (defined($keyword)) {
-        $log->debugf('[%2d] Trying grammar %s: success: %s', $recognizerInterface->recurseLevel, '<keyword>', $keyword);
-    } else {
-        $log->debugf('[%2d] Trying grammar %s: failure', $recognizerInterface->recurseLevel, '<keyword>');
-    }
+    # if (defined($keyword)) {
+    #     $log->debugf('[%2d] Trying grammar %s: success: %s', $recognizerInterface->recurseLevel, '<keyword>', $keyword);
+    # } else {
+    #     $log->debugf('[%2d] Trying grammar %s: failure', $recognizerInterface->recurseLevel, '<keyword>');
+    # }
 
     return $keyword;
 }
@@ -264,13 +264,13 @@ sub _error {
 sub _lexicalEventManager {
     my ($self, $eslifRecognizer, $recognizerInterface) = @_;
 
-    foreach (split/\R/, xd($eslifRecognizer->input // '')) {
-        $log->debugf('[%2d] Input: %s', $recognizerInterface->recurseLevel, $_);
-        last;
-    }
+    # foreach (split/\R/, xd($eslifRecognizer->input // '')) {
+    #     $log->debugf('[%2d] Input: %s', $recognizerInterface->recurseLevel, $_);
+    #     last;
+    # }
 
     my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
-    $log->debugf('[%2d] Events: %s', $recognizerInterface->recurseLevel, \@events);
+    # $log->debugf('[%2d] Events: %s', $recognizerInterface->recurseLevel, \@events);
 
     #
     # At any predicted event, we have two possible sub-grammars
@@ -315,7 +315,7 @@ sub _lexicalEventManager {
             }
         }
         elsif ($event eq "'exhausted'") {
-	    $log->debugf('[%2d] Completion event', $recognizerInterface->recurseLevel);
+	    # $log->debugf('[%2d] Completion event', $recognizerInterface->recurseLevel);
             $recognizerInterface->hasCompletion(1);
         }
         else {
@@ -323,7 +323,7 @@ sub _lexicalEventManager {
         }
 
 	if (defined($match)) {
-            $log->debugf('[%2d] Event %s matches lexeme %s: %s', $recognizerInterface->recurseLevel, $event, $name, $match);
+            # $log->debugf('[%2d] Event %s matches lexeme %s: %s', $recognizerInterface->recurseLevel, $event, $name, $match);
             my $length = bytes::length($match);
             if ($length >= $latm) {
                 if ($length > $latm) {
@@ -333,21 +333,22 @@ sub _lexicalEventManager {
                 push(@matches, { match => $match, name => $name });
             }
         } else {
-            $log->debugf('[%2d] Event %s matches no lexeme', $recognizerInterface->recurseLevel, $event);
+            # $log->debugf('[%2d] Event %s matches no lexeme', $recognizerInterface->recurseLevel, $event);
         }
     }
 
     if ($latm) {
         foreach (@matches) {
-	    $log->debugf('[%2d] Lexeme alternative: %s: %s', $recognizerInterface->recurseLevel, $_->{name}, $_->{match});
+	    # $log->debugf('[%2d] Lexeme alternative: %s: %s', $recognizerInterface->recurseLevel, $_->{name}, $_->{match});
             $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{match})
         }
-        $log->debugf('[%2d] Lexeme complete on %d bytes', $recognizerInterface->recurseLevel, $latm);
+        # $log->debugf('[%2d] Lexeme complete on %d bytes', $recognizerInterface->recurseLevel, $latm);
         $self->_error('lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
-        $log->debugf('[%2d] Events: no lexeme', $recognizerInterface->recurseLevel, \@events);
+    } else {
+        # $log->debugf('[%2d] Events: no lexeme', $recognizerInterface->recurseLevel, \@events);
     }
 
-    $log->debugf('[%2d] Events: %d matches', $recognizerInterface->recurseLevel, \@events, scalar(@matches));
+    # $log->debugf('[%2d] Events: %d matches', $recognizerInterface->recurseLevel, \@events, scalar(@matches));
 }
 
 1;
@@ -360,13 +361,12 @@ __[ pre lexical ]__
 <input> ::= /./su *
 
 __[ lexical ]__
-# :default ::= action => my_action # ::convert[UTF-8]
 :default ::= action => ::ast symbol-action => ::convert[UTF-8]
 :desc ::= 'Lexical grammar'
 :discard ::= <comment>
 
 #
-# Note that the spec does NOT say if file-name characters disable comments. It is assume that they do.
+# Note that the spec does NOT say if file-name characters disable comments. We assume they do so.
 #
 :terminal ::= "'"  pause => after event => :discard[switch]           # Disable comment in character literal
 :terminal ::= '"'  pause => after event => :discard[switch]           # Disable comment in regular string literal
@@ -386,7 +386,6 @@ __[ lexical ]__
 
 <new line> ::= /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
 
-# :discard ::= <whitespace> # event => discard_whitespace$
 <whitespace>           ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u
 
 <comment>                    ::= <single line comment>
@@ -796,3 +795,5 @@ __[ keyword ]__
             | 'true'
             | 'unchecked'
             | 'void'
+
+__[ syntactic ]__

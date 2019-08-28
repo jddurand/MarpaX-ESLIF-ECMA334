@@ -65,7 +65,9 @@ sub do_test {
 done_testing();
 
 __DATA__
-__[ 001 ok / single line comment ]__
+__[ 001 ok / general ]__
+#if TEST
+#endif
 // A Hello World! program in C#.
 using System;
 {
