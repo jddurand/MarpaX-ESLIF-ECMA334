@@ -257,7 +257,7 @@ sub _keyword {
 sub _error {
     my ($self, $fmt, @args) = @_;
 
-    $log->debugf($fmt, @args);
+    $log->errorf($fmt, @args);
     croak sprintf($fmt, @args);
 }
 
@@ -276,7 +276,7 @@ sub _lexicalEventManager {
     # At any predicted event, we have two possible sub-grammars
     #
     my @matches;
-    my $latm = 0;
+    my $latm = -1;
 
     foreach my $event (@events) {
         my ($identifier_or_keyword, $keyword, $match, $name) = (undef, undef, undef, undef);
@@ -314,6 +314,26 @@ sub _lexicalEventManager {
                 }
             }
         }
+        elsif ($event eq '^pp_marker') {
+            #
+            # We required that that input is entirely within a string
+            #
+            # We want to match:
+            # <whitespace opt> '#' <whitespace opt> PP_KEYWORD
+            # and will send a zero-length token if that is the case
+            #
+            my $input = $eslifRecognizer->input();
+            if (defined($input)) {
+                #
+                # can be undef at the very end
+                #
+                if ($eslifRecognizer->lexemeTry('PP MARKER')) {
+                    $log->noticef('[%2d] PP MARKER match', $recognizerInterface->recurseLevel);
+                    $match = '';
+                    $name = 'PP MARKER';
+                }
+            }
+        }
         elsif ($event eq "'exhausted'") {
 	    # $log->debugf('[%2d] Completion event', $recognizerInterface->recurseLevel);
             $recognizerInterface->hasCompletion(1);
@@ -337,7 +357,7 @@ sub _lexicalEventManager {
         }
     }
 
-    if ($latm) {
+    if ($latm >= 0) {
         foreach (@matches) {
 	    # $log->debugf('[%2d] Lexeme alternative: %s: %s', $recognizerInterface->recurseLevel, $_->{name}, $_->{match});
             $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{match})
@@ -587,6 +607,27 @@ event ^keyword = predicted <keyword>
 <right shift> ::= '>' '>'
 <right shift assignment> ::= '>' '>='
 
+# A pre-processing directive always occupies a separate line of source code and always begins with a
+# '#' character and a pre-processing directive name. White space may occur before the '#' character and
+# between the '#' character and the directive name.
+#
+# A source line containing a #define , #undef , #if , #elif , #else , #endif , #line , or #endregion
+# directive can end with a single-line comment. Delimited comments (the /* */ style of comments) are not
+# permitted on source lines containing pre-processing directives.
+#
+# => This is why  #define , #undef , #if , #elif , #else , #endif and #line have <pp new line> that contains
+#    <single line comment opt>
+# => For #endregion this is <pp message> instead, which I believe is an error. For #endregion <pp message>
+#    is changed to <pp endregion message> that uses <pp new line> instead of <new line>
+# => :discard is switched off when a pp directive is found by lookahead
+# => :discard is switch on at the end of <pp directive>
+
+event :discard[switch] = completed <pp directive>
+:lexeme ::= <PP MARKER> pause => after event => :discard[switch]
+event ^pp_marker = predicted <pp marker>
+<pp marker> ::= <PP MARKER>
+<PP MARKER> ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*(?:define|undef|if|elif|else|endif|line|error|region|endregion|pragma)/u
+
 <pp directive> ::= <pp declaration>
                  | <pp conditional>
                  | <pp line>
@@ -612,8 +653,8 @@ event ^conditional_symbol = predicted <conditional symbol>
                           | 'false'
                           | <conditional symbol>
                           | '(' <whitespace opt> <pp expression> <whitespace opt> ')'
-<pp declaration> ::= <whitespace opt> '#' <whitespace opt> 'define' <whitespace> <conditional symbol> <pp new line>
-                   | <whitespace opt> '#' <whitespace opt> 'undef'  <whitespace> <conditional symbol> <pp new line>
+<pp declaration> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'define' <whitespace> <conditional symbol> <pp new line>
+                   | <pp marker> <whitespace opt> '#' <whitespace opt> 'undef'  <whitespace> <conditional symbol> <pp new line>
 <pp new line> ::= <whitespace opt> <single line comment opt> <new line>
 <single line comment opt> ::=
 <single line comment opt> ::= <single line comment>
@@ -623,13 +664,13 @@ event ^conditional_symbol = predicted <conditional symbol>
 <pp elif sections opt> ::= <pp elif sections>
 <pp else section opt> ::=
 <pp else section opt> ::= <pp else section>
-<pp if section> ::= <whitespace opt> '#' <whitespace opt> 'if' <whitespace> <pp expression> <pp new line> <conditional section opt>
+<pp if section> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'if' <whitespace> <pp expression> <pp new line> <conditional section opt>
 <conditional section opt> ::=
 <conditional section opt> ::= <conditional section>
 <pp elif sections> ::= <pp elif section>+
-<pp elif section> ::= <whitespace opt> '#' <whitespace opt> 'elif' <whitespace> <pp expression> <pp new line> <conditional section opt>
-<pp else section> ::= <whitespace opt> '#' <whitespace opt> 'else' <pp new line> <conditional section opt>
-<pp endif> ::= <whitespace opt> '#' <whitespace opt> 'endif' <pp new line>
+<pp elif section> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'elif' <whitespace> <pp expression> <pp new line> <conditional section opt>
+<pp else section> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'else' <pp new line> <conditional section opt>
+<pp endif> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'endif' <pp new line>
 <conditional section> ::= <input section>
                         | <skipped section>
 <skipped section> ::= <skipped section part>+
@@ -640,16 +681,19 @@ event ^conditional_symbol = predicted <conditional symbol>
 <skipped characters> ::= <whitespace opt> <not number sign> <input characters opt>
 <not number sign> ::= /[^#]/u # Any input-character except #
 
-<pp diagnostic> ::= <whitespace opt> '#' <whitespace opt> 'error' <pp message>
-                  | <whitespace opt> '#' <whitespace opt> 'warning' <pp message>
+<pp diagnostic> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'error' <pp message>
+                  | <pp marker> <whitespace opt> '#' <whitespace opt> 'warning' <pp message>
 <pp message> ::= <new line>
                | <whitespace> <input characters opt> <new line>
 
 <pp region> ::= <pp start region> <conditional section opt> <pp end region>
-<pp start region> ::= <whitespace opt> '#' <whitespace opt> 'region' <pp message>
-<pp end region> ::= <whitespace opt> '#' <whitespace opt> 'endregion' <pp message>
+<pp start region> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'region' <pp message>
+# WAS: <pp end region> ::= <whitespace opt> '#' <whitespace opt> 'endregion' <pp message>
+<pp end region> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'endregion' <pp endregion message>
+<pp endregion message> ::= <pp new line>
+                         | <whitespace> <input characters opt> <pp new line>
 
-<pp line> ::= <whitespace opt> '#' <whitespace opt> 'line' <whitespace> <line indicator> <pp new line>
+<pp line> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'line' <whitespace> <line indicator> <pp new line>
 <line indicator> ::= <decimal digits> <whitespace> <file name>
                    | <decimal digits>
                    | 'default'
@@ -658,17 +702,18 @@ event ^conditional_symbol = predicted <conditional symbol>
 <file name characters> ::= <file name character>+
 <file name character> ::= /[^\x{0022}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY INPUT CHARACTER EXCEPT 0022 AND NEW LINE CHARACTER>
 
-<pp pragma> ::= <whitespace opt> '#' <whitespace opt> 'pragma' <pp pragma text>
+<pp pragma> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'pragma' <pp pragma text>
 <pp pragma text> ::= <new line>
                    | <whitespace> <input characters opt> <new line>
 
 #
 # Lexemes
 #
-<KEYWORD>                                                                            ~ /[^\s\S]/ # Matches nothing
-<IDENTIFIER OR KEYWORD>                                                              ~ /[^\s\S]/ # Matches nothing
-<ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>                                     ~ /[^\s\S]/ # Matches nothing
-<AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>                                     ~ /[^\s\S]/ # Matches nothing
+<KEYWORD>                                        ~ /[^\s\S]/ # Matches nothing
+<IDENTIFIER OR KEYWORD>                          ~ /[^\s\S]/ # Matches nothing
+<ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE> ~ /[^\s\S]/ # Matches nothing
+<AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD> ~ /[^\s\S]/ # Matches nothing
+<PP MARKER>                                      ~ /[^\s\S]/ # Matches nothing
 
 __[ identifier or keyword ]__
 :default ::= action => ::convert[UTF-8]

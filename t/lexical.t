@@ -66,7 +66,9 @@ done_testing();
 
 __DATA__
 __[ 001 ok / general ]__
-#if TEST
+#if TEST // comment
+/* comment */
+  notvalid
 #endif
 // A Hello World! program in C#.
 using System;
@@ -119,3 +121,8 @@ namespace NeticaDemo
         }
     }
 }
+__[ 005 ok / general ]__
+#if TEST // comment
+/* comment */
+  notvalid
+#endif
