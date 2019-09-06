@@ -59,6 +59,7 @@ my $PRE_LEXICAL_BNF           = ${__PACKAGE__->section_data('pre lexical')};
 my $LEXICAL_BNF               = ${__PACKAGE__->section_data('lexical')};
 my $IDENTIFIER_OR_KEYWORD_BNF = ${__PACKAGE__->section_data('identifier or keyword')};
 my $KEYWORD_BNF               = ${__PACKAGE__->section_data('keyword')};
+my $PP_EXPRESSION_BNF         = ${__PACKAGE__->section_data('pp expression')};
 
 my $PRE_LEXICAL_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $PRE_LEXICAL_BNF);
 $log->debug('pre lexical grammar compiled');
@@ -68,6 +69,8 @@ my $IDENTIFIER_OR_KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->n
 $log->debug('identifier or keyword grammar compiled');
 my $KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $KEYWORD_BNF); # No log
 $log->debug('keyword grammar compiled');
+my $PP_EXPRESSION_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $PP_EXPRESSION_BNF); # No log
+$log->debug('pp expression grammar compiled');
 
 # ============================================================================
 # new
@@ -172,6 +175,8 @@ sub _parse {
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
     # -----------------------------------------------------
+    my @expected = @{$eslifRecognizer->lexemeExpected};
+    $log->noticef('[%2d] Expected: %s', $recognizerInterface->recurseLevel, \@expected);
     $eslifRecognizer->scan(1) || croak 'Initial scan failed';
     $self->$eventManager($eslifRecognizer, $recognizerInterface);
     if ($eslifRecognizer->isCanContinue) {
@@ -229,6 +234,31 @@ sub _identifier_or_keyword {
     return $identifier_or_keyword;
 }
 
+sub _pp_expression {
+    my ($self, $eslifRecognizer, $recognizerInterface) = @_;
+
+    $log->noticef('[%2d] Trying grammar %s', $recognizerInterface->recurseLevel, '<pp expression>');
+
+    my $pp_expression = eval {
+        $self->_parse($PP_EXPRESSION_GRAMMAR,
+                      'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
+                      'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
+                      \&_lexicalEventManager,
+                      input => $eslifRecognizer->input,
+                      recurseLevel => $recognizerInterface->recurseLevel + 1,
+                      exhaustion => 1,
+                      encoding => 'UTF-8');
+    };
+
+    # if (defined($identifier_or_keyword)) {
+    #     $log->debugf('[%2d] Trying grammar %s: success: %s', $recognizerInterface->recurseLevel, '<identifier or keyword>', $identifier_or_keyword);
+    # } else {
+    #     $log->debugf('[%2d] Trying grammar %s: failure', $recognizerInterface->recurseLevel, '<identifier or keyword>');
+    # }
+
+    return $pp_expression;
+}
+
 sub _keyword {
     my ($self, $eslifRecognizer, $recognizerInterface) = @_;
 
@@ -270,7 +300,9 @@ sub _lexicalEventManager {
     # }
 
     my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
-    # $log->debugf('[%2d] Events: %s', $recognizerInterface->recurseLevel, \@events);
+    $log->noticef('[%2d] Events  : %s', $recognizerInterface->recurseLevel, \@events);
+    my @expected = @{$eslifRecognizer->lexemeExpected};
+    $log->noticef('[%2d] Expected: %s', $recognizerInterface->recurseLevel, \@expected);
 
     #
     # At any predicted event, we have two possible sub-grammars
@@ -279,7 +311,7 @@ sub _lexicalEventManager {
     my $latm = -1;
 
     foreach my $event (@events) {
-        my ($identifier_or_keyword, $keyword, $match, $name) = (undef, undef, undef, undef);
+        my ($identifier_or_keyword, $keyword, $match, $name, $pp_expression) = (undef, undef, undef, undef, undef);
 
         if ($event eq '^available_identifier') {
             $identifier_or_keyword //= $self->_identifier_or_keyword($eslifRecognizer, $recognizerInterface);
@@ -333,6 +365,26 @@ sub _lexicalEventManager {
                     $name = 'PP MARKER';
                 }
             }
+        }
+        elsif ($event eq '^pp_expression') {
+            $pp_expression //= $self->_pp_expression($eslifRecognizer, $recognizerInterface);
+	    $log->noticef('[%2d] Last <pp expression> is: %s', $recognizerInterface->recurseLevel, $pp_expression);
+        }
+        elsif ($event eq "^conditional_section_ok") {
+            #
+            # We want to evaluate the last <pp expression>
+            #
+            my ($offset, $length) = $eslifRecognizer->lastCompletedLocation('pp expression');
+	    $log->noticef('[%2d] Last <pp expression> is at (offset, length) = (%d, %d)', $recognizerInterface->recurseLevel, $offset, $length);
+            croak "TO DO: $event";
+        }
+        elsif ($event eq "^conditional_section_ko") {
+            #
+            # We want to evaluate the last <pp expression>
+            #
+            my ($offset, $length) = $eslifRecognizer->lastCompletedLocation('pp expression');
+	    $log->noticef('[%2d] Last <pp expression> is at (offset, length) = (%d, %d)', $recognizerInterface->recurseLevel, $offset, $length);
+            croak "TO DO: $event";
         }
         elsif ($event eq "'exhausted'") {
 	    # $log->debugf('[%2d] Completion event', $recognizerInterface->recurseLevel);
@@ -637,42 +689,37 @@ event ^pp_marker = predicted <pp marker>
 
 event ^conditional_symbol = predicted <conditional symbol>
 <conditional symbol> ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
-<pp expression> ::= <whitespace opt> <pp or expression> <whitespace opt>
 <whitespace opt> ::=
 <whitespace opt> ::= <whitespace>
-<pp or expression> ::= <pp and expression>
-                     | <pp or expression> <whitespace opt> '||' <whitespace opt> <pp and expression>
-<pp and expression> ::= <pp equality expression>
-                      | <pp and expression> <whitespace opt> '&&' <whitespace opt> <pp equality expression>
-<pp equality expression> ::= <pp unary expression>
-                           | <pp equality expression> <whitespace opt> '==' <whitespace opt> <pp unary expression>
-                           | <pp equality expression> <whitespace opt> '!=' <whitespace opt> <pp unary expression>
-<pp unary expression> ::= <pp primary expression>
-                        | '!' <whitespace opt> <pp unary expression>
-<pp primary expression> ::= 'true'
-                          | 'false'
-                          | <conditional symbol>
-                          | '(' <whitespace opt> <pp expression> <whitespace opt> ')'
-<pp declaration> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'define' <whitespace> <conditional symbol> <pp new line>
-                   | <pp marker> <whitespace opt> '#' <whitespace opt> 'undef'  <whitespace> <conditional symbol> <pp new line>
+<pp declaration> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'define' <whitespace> <conditional symbol> <pp new line>
+                   | (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'undef'  <whitespace> <conditional symbol> <pp new line>
 <pp new line> ::= <whitespace opt> <single line comment opt> <new line>
 <single line comment opt> ::=
 <single line comment opt> ::= <single line comment>
 
+event ^pp_expression = predicted <pp expression>
+<pp expression> ::= <PP EXPRESSION>
 <pp conditional> ::= <pp if section> <pp elif sections opt> <pp else section opt> <pp endif>
 <pp elif sections opt> ::=
 <pp elif sections opt> ::= <pp elif sections>
 <pp else section opt> ::=
 <pp else section opt> ::= <pp else section>
-<pp if section> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'if' <whitespace> <pp expression> <pp new line> <conditional section opt>
+<pp if section> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'if' <whitespace> <pp expression> <pp new line> <conditional section opt>
 <conditional section opt> ::=
 <conditional section opt> ::= <conditional section>
 <pp elif sections> ::= <pp elif section>+
-<pp elif section> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'elif' <whitespace> <pp expression> <pp new line> <conditional section opt>
-<pp else section> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'else' <pp new line> <conditional section opt>
-<pp endif> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'endif' <pp new line>
-<conditional section> ::= <input section>
-                        | <skipped section>
+<pp elif section> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'elif' <whitespace> <pp expression> <pp new line> <conditional section opt>
+<pp else section> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'else' <pp new line> <conditional section opt>
+<pp endif> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'endif' <pp new line>
+
+event ^conditional_section_ok = predicted <conditional section ok>
+event ^conditional_section_ko = predicted <conditional section ko>
+
+<conditional section ok> ::= <CONDITIONAL SECTION OK>
+<conditional section ko> ::= <CONDITIONAL SECTION KO>
+
+<conditional section> ::= (- <conditional section ok> -) <input section>
+                        | (- <conditional section ko> -) <skipped section>
 <skipped section> ::= <skipped section part>+
 <skipped section part> ::= <skipped characters opt> <new line>
                          | <pp directive>
@@ -681,19 +728,19 @@ event ^conditional_symbol = predicted <conditional symbol>
 <skipped characters> ::= <whitespace opt> <not number sign> <input characters opt>
 <not number sign> ::= /[^#]/u # Any input-character except #
 
-<pp diagnostic> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'error' <pp message>
-                  | <pp marker> <whitespace opt> '#' <whitespace opt> 'warning' <pp message>
+<pp diagnostic> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'error' <pp message>
+                  | (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'warning' <pp message>
 <pp message> ::= <new line>
                | <whitespace> <input characters opt> <new line>
 
 <pp region> ::= <pp start region> <conditional section opt> <pp end region>
-<pp start region> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'region' <pp message>
+<pp start region> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'region' <pp message>
 # WAS: <pp end region> ::= <whitespace opt> '#' <whitespace opt> 'endregion' <pp message>
-<pp end region> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'endregion' <pp endregion message>
+<pp end region> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'endregion' <pp endregion message>
 <pp endregion message> ::= <pp new line>
                          | <whitespace> <input characters opt> <pp new line>
 
-<pp line> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'line' <whitespace> <line indicator> <pp new line>
+<pp line> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'line' <whitespace> <line indicator> <pp new line>
 <line indicator> ::= <decimal digits> <whitespace> <file name>
                    | <decimal digits>
                    | 'default'
@@ -702,7 +749,7 @@ event ^conditional_symbol = predicted <conditional symbol>
 <file name characters> ::= <file name character>+
 <file name character> ::= /[^\x{0022}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY INPUT CHARACTER EXCEPT 0022 AND NEW LINE CHARACTER>
 
-<pp pragma> ::= <pp marker> <whitespace opt> '#' <whitespace opt> 'pragma' <pp pragma text>
+<pp pragma> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'pragma' <pp pragma text>
 <pp pragma text> ::= <new line>
                    | <whitespace> <input characters opt> <new line>
 
@@ -714,6 +761,9 @@ event ^conditional_symbol = predicted <conditional symbol>
 <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE> ~ /[^\s\S]/ # Matches nothing
 <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD> ~ /[^\s\S]/ # Matches nothing
 <PP MARKER>                                      ~ /[^\s\S]/ # Matches nothing
+<CONDITIONAL SECTION OK>                         ~ /[^\s\S]/ # Matches nothing
+<CONDITIONAL SECTION KO>                         ~ /[^\s\S]/ # Matches nothing
+<PP EXPRESSION>                                  ~ /[^\s\S]/ # Matches nothing
 
 __[ identifier or keyword ]__
 :default ::= action => ::convert[UTF-8]
@@ -841,4 +891,29 @@ __[ keyword ]__
             | 'unchecked'
             | 'void'
 
+__[ pp expression ]__
+:desc    ::= 'Pre-processing expression'
+:default ::= action => ::shift
+
+<pp expression>                                  ::= (- <whitespace opt> -) <pp or expression> (- <whitespace opt> -)
+<whitespace opt>                                 ::=
+<whitespace opt>                                 ::= <whitespace>
+<pp or expression>                               ::= <pp and expression>
+                                                   | <pp or expression> (- <whitespace opt> '||' <whitespace opt> -) <pp and expression>         action => pp_or_expression
+<pp and expression>                              ::= <pp equality expression>
+                                                   | <pp and expression> (- <whitespace opt> '&&' <whitespace opt> -) <pp equality expression>   action => pp_and_expression
+<pp equality expression>                         ::= <pp unary expression>
+                                                   | <pp equality expression> (- <whitespace opt> '==' <whitespace opt> -) <pp unary expression> action => pp_equal_expression
+                                                   | <pp equality expression> (- <whitespace opt> '!=' <whitespace opt> -) <pp unary expression> action => pp_not_equal_expression
+<pp unary expression>                            ::= <pp primary expression>
+                                                   | (- '!' <whitespace opt> -) <pp unary expression>                                            action => pp_not_expression
+<pp primary expression>                          ::= 'true'                                                                                      action => ::true
+                                                   | 'false'                                                                                     action => ::false
+                                                   | <conditional symbol>
+                                                   | (- '(' <whitespace opt> -) <pp expression> (- <whitespace opt> ')' -)
+<whitespace>                                     ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u
+event ^conditional_symbol = predicted <conditional symbol>
+<conditional symbol>                             ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
+
+<ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>   ~ /[^\s\S]/ # Matches nothing
 __[ syntactic ]__

@@ -39,9 +39,19 @@ Instantiate a new recognizer interface object. C<%options> should contain at lea
 
 The input to parse
 
+=back
+
+C<%options> may contain:
+
+=over
+
 =item encoding
 
 The encoding of the data
+
+=item definitions
+
+A reference to a hash containing known definitions, where a true value means the symbol is set.
 
 =back
 
@@ -49,9 +59,13 @@ The encoding of the data
 
 sub new {
     my ($pkg, %options) = @_;
+
+    my $definitions = delete($options{definitions}) // {};
+    croak 'definitions must be a HASH reference' unless ((ref($definitions) // '') eq 'HASH');
     bless {
 	hasCompletion => 0,
 	recurseLevel => 0,
+        definitions => $definitions,
 	%options}, $pkg
 }
 

@@ -50,7 +50,7 @@ foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAG
 sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
-    my @r = $ecma334->parse(input => $input, encoding => $encoding);
+    my @r = $ecma334->parse(input => $input, encoding => $encoding, definitions => { TRUE => $MarpaX::ESLIF::true,  FALSE => $MarpaX::ESLIF::false });
     if ($want_ok && @r) {
         use Data::Scan::Printer;
         dspp($r[0])
@@ -122,7 +122,6 @@ namespace NeticaDemo
     }
 }
 __[ 005 ok / general ]__
-#if TEST // comment
-/* comment */
-  notvalid
+#if TEST
+
 #endif
