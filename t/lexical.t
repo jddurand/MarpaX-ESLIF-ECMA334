@@ -66,7 +66,7 @@ done_testing();
 
 __DATA__
 __[ 001 ok / general ]__
-#if TRUE // comment
+#if !TRUE // comment
 /* comment */
   notvalid
 #endif

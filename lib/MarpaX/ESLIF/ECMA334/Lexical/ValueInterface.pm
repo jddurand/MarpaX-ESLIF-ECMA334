@@ -159,15 +159,7 @@ Computes the value of a C<!> pre-processing expression
 
 =cut
 
-sub pp_condition_symbol {
-    print STDERR "Origin: $_[1]\n";
-    my $normalizedSymbol = $_[0]->_normalized_condition_symbol($_[1]);
-    print STDERR "normalizedSymbol: $normalizedSymbol\n";
-    my $rc = $_[0]->{definitions}->{$normalizedSymbol} //= $MarpaX::ESLIF::false;
-    print STDERR "value: $rc\n";
-    
-    return $rc
- }
+sub pp_condition_symbol { return $_[0]->{definitions}->{$_[0]->_normalized_condition_symbol($_[1])} //= $MarpaX::ESLIF::false }
 
 =head1 SEE ALSO
 

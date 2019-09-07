@@ -78,7 +78,7 @@ $log->debug('pp expression grammar compiled');
 sub new {
     my ($pkg) = @_;
 
-    return bless {}, $pkg
+    return bless { last_pp_expression => $MarpaX::ESLIF::false }, $pkg
 }
 
 # ============================================================================
@@ -99,6 +99,7 @@ sub parse {
                          'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
                          'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
                          \&_lexicalEventManager,
+                         undef, # sharedEslifRecognizer
                          %options,
                          input => $preparsedInput,
                          encoding => 'UTF-8'
@@ -150,7 +151,7 @@ sub _preparse {
 # _parse
 # ============================================================================
 sub _parse {
-    my ($self, $eslifGrammar, $eslifRecognizerInterfaceClass, $eslifValueInterfaceClass, $eventManager, %options) = @_;
+    my ($self, $eslifGrammar, $eslifRecognizerInterfaceClass, $eslifValueInterfaceClass, $eventManager, $sharedEslifRecognizer, %options) = @_;
 
     # -------------------------------------------
     # Instanciate recognizer and value interfaces
@@ -162,6 +163,7 @@ sub _parse {
     # Instanciate a recognizer
     # ------------------------
     my $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($eslifGrammar, $eslifRecognizerInterface);
+    $eslifRecognizer->share($sharedEslifRecognizer) if defined($sharedEslifRecognizer);
 
     # -------------------------------------------------------------------------
     # Make sure all data (that is recognizer interface memory) is seen by ESLIF
@@ -217,12 +219,12 @@ sub _identifier_or_keyword {
                       'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
                       'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
                       \&_lexicalEventManager,
+                      undef, # sharedEslifRecognizer
                       input => $eslifRecognizer->input,
                       recurseLevel => $eslifRecognizerInterface->recurseLevel + 1,
                       exhaustion => 1,
                       encoding => 'UTF-8',
-                      definitions => $eslifRecognizerInterface->definitions,
-                      pp_expression_values => $eslifRecognizerInterface->pp_expression_values);
+                      definitions => $eslifRecognizerInterface->definitions);
     };
 
     # if (defined($identifier_or_keyword)) {
@@ -244,12 +246,12 @@ sub _pp_expression {
                       'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
                       'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
                       \&_lexicalEventManager,
+                      $eslifRecognizer, # sharedEslifRecognizer
                       input => $eslifRecognizer->input,
                       recurseLevel => $eslifRecognizerInterface->recurseLevel + 1,
                       exhaustion => 1,
                       encoding => 'UTF-8',
-                      definitions => $eslifRecognizerInterface->definitions,
-                      pp_expression_values => $eslifRecognizerInterface->pp_expression_values);
+                      definitions => $eslifRecognizerInterface->definitions);
     };
 
     # if (defined($identifier_or_keyword)) {
@@ -271,12 +273,12 @@ sub _keyword {
                       'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
                       'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
                       \&_lexicalEventManager,
+                      undef, # sharedEslifRecognizer
                       input => $eslifRecognizer->input,
                       recurseLevel => $eslifRecognizerInterface->recurseLevel + 1,
                       exhaustion => 1,
                       encoding => 'UTF-8',
-                      definitions => $eslifRecognizerInterface->definitions,
-                      pp_expression_values => $eslifRecognizerInterface->pp_expression_values);
+                      definitions => $eslifRecognizerInterface->definitions);
     };
 
     # if (defined($keyword)) {
@@ -313,6 +315,7 @@ sub _lexicalEventManager {
     #
     my @matches;
     my $latm = -1;
+    my $use_last_pp_expression = 1;
 
     foreach my $event (@events) {
         my ($identifier_or_keyword, $keyword, $match, $name, $pp_expression) = (undef, undef, undef, undef, undef);
@@ -352,6 +355,11 @@ sub _lexicalEventManager {
         }
         elsif ($event eq '^pp_marker') {
             #
+            # Note that pp_marker[] is a nulled event, i.e. it it ALWAYS before
+            # ^conditional_section_ok and ^conditional_section_ko events: this is
+            # perfect, because if <PP MARKER> matches, it invalidates the existence of a conditional section
+            # at the same location.
+            #
             # We required that that input is entirely within a string
             #
             # We want to match:
@@ -373,23 +381,34 @@ sub _lexicalEventManager {
         elsif ($event eq '^pp_expression') {
             $pp_expression //= $self->_pp_expression($eslifRecognizer, $eslifRecognizerInterface);
 	    $log->noticef('[%2d] Last <pp expression> is: %s', $eslifRecognizerInterface->recurseLevel, $pp_expression);
-            $eslifRecognizerInterface->pp_expression_values_push($pp_expression);
+            #
+            # Remember the last expression, and send a zero-length token into <PP EXPRESSION>
+            # because _pp_expression() shared to stream with our recognizer: our position is already
+            # advanced.
+            #
+            $self->{last_pp_expression} = $pp_expression;
+            $match = '';
+            $name = 'PP EXPRESSION';
         }
         elsif ($event eq "^conditional_section_ok") {
             #
-            # We want to evaluate the last <pp expression>
+            # We use the last evaluated <pp expression>
             #
-            my ($offset, $length) = $eslifRecognizer->lastCompletedLocation('pp expression');
-	    $log->noticef('[%2d] Last <pp expression> is at (offset, length) = (%d, %d)', $eslifRecognizerInterface->recurseLevel, $offset, $length);
-            croak "TO DO: $event";
+            if ($use_last_pp_expression && $self->{last_pp_expression}) {
+                $log->noticef('[%2d] CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
+                $match = '';
+                $name = 'CONDITIONAL SECTION OK';
+            }
         }
         elsif ($event eq "^conditional_section_ko") {
             #
-            # We want to evaluate the last <pp expression>
+            # We use the last evaluated <pp expression>
             #
-            my ($offset, $length) = $eslifRecognizer->lastCompletedLocation('pp expression');
-	    $log->noticef('[%2d] Last <pp expression> is at (offset, length) = (%d, %d)', $eslifRecognizerInterface->recurseLevel, $offset, $length);
-            croak "TO DO: $event";
+            if ($use_last_pp_expression && ! $self->{last_pp_expression}) {
+                $log->noticef('[%2d] CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
+                $match = '';
+                $name = 'CONDITIONAL SECTION KO';
+            }
         }
         elsif ($event eq "'exhausted'") {
 	    # $log->debugf('[%2d] Completion event', $eslifRecognizerInterface->recurseLevel);
@@ -683,7 +702,6 @@ event :discard[switch] = completed <pp directive>
 :lexeme ::= <PP MARKER> pause => after event => :discard[switch]
 event ^pp_marker = predicted <pp marker>
 <pp marker> ::= <PP MARKER>
-<PP MARKER> ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*(?:define|undef|if|elif|else|endif|line|error|region|endregion|pragma)/u
 
 <pp directive> ::= <pp declaration>
                  | <pp conditional>
@@ -738,7 +756,19 @@ event ^conditional_section_ko = predicted <conditional section ko>
 <pp message> ::= <new line>
                | <whitespace> <input characters opt> <new line>
 
-<pp region> ::= <pp start region> <conditional section opt> <pp end region>
+# The lexical processing of a region:
+# #region
+# ...
+# #endregion
+# corresponds exactly to the lexical processing of a conditional compilation directive of the form:
+# #if true
+# ...
+# #endif
+#
+# ==> This is an <input section opt> instead of <conditional section opt>
+#
+# <pp region> ::= <pp start region> <conditional section opt> <pp end region>
+<pp region> ::= <pp start region> <input section opt> <pp end region>
 <pp start region> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'region' <pp message>
 # WAS: <pp end region> ::= <whitespace opt> '#' <whitespace opt> 'endregion' <pp message>
 <pp end region> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'endregion' <pp endregion message>
@@ -765,7 +795,7 @@ event ^conditional_section_ko = predicted <conditional section ko>
 <IDENTIFIER OR KEYWORD>                          ~ /[^\s\S]/ # Matches nothing
 <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE> ~ /[^\s\S]/ # Matches nothing
 <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD> ~ /[^\s\S]/ # Matches nothing
-<PP MARKER>                                      ~ /[^\s\S]/ # Matches nothing
+<PP MARKER>                                      ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*(?:define|undef|if|elif|else|endif|line|error|region|endregion|pragma)/u
 <CONDITIONAL SECTION OK>                         ~ /[^\s\S]/ # Matches nothing
 <CONDITIONAL SECTION KO>                         ~ /[^\s\S]/ # Matches nothing
 <PP EXPRESSION>                                  ~ /[^\s\S]/ # Matches nothing
