@@ -38,7 +38,17 @@ Instantiate a new value interface object.
 sub new {
     my ($pkg, %options) = @_;
 
-    return bless { result => undef, %options }, $pkg
+    my $definitions = delete($options{definitions}) // {};
+    croak 'definitions must be a HASH reference' unless ((ref($definitions) // '') eq 'HASH');
+    foreach (sort keys %{$definitions}) {
+        croak "$_ definition must be a MarpaX::ESLIF boolean" unless MarpaX::ESLIF::is_bool($definitions->{$_})
+    }
+
+    return bless {
+        result => undef,
+        definitions => $definitions,
+        %options
+    }, $pkg
 }
 
 # ----------------
@@ -103,6 +113,62 @@ Sets the current parse tree value.
 
 sub setResult          { return $_[0]->{result} = $_[1] }
 
+=head3 pp_or_expression
+
+Computes the value of a C<||> pre-processing expression
+
+=cut
+
+sub pp_or_expression   { return ($_[1] // 0) || ($_[2] // 0) ? $MarpaX::ESLIF::true : $MarpaX::ESLIF::false }
+
+=head3 pp_and_expression
+
+Computes the value of a C<&&> pre-processing expression
+
+=cut
+
+sub pp_and_expression   { return ($_[1] // 0) && ($_[2] // 0) ? $MarpaX::ESLIF::true : $MarpaX::ESLIF::false }
+
+=head3 pp_equal_expression
+
+Computes the value of a C<==> pre-processing expression
+
+=cut
+
+sub pp_equal_expression   { return ($_[1] // 0) == ($_[2] // 0) ? $MarpaX::ESLIF::true : $MarpaX::ESLIF::false }
+
+=head3 pp_not_equal_expression
+
+Computes the value of a C<!=> pre-processing expression
+
+=cut
+
+sub pp_not_equal_expression   { return ($_[1] // 0) != ($_[2] // 0) ? $MarpaX::ESLIF::true : $MarpaX::ESLIF::false }
+
+=head3 pp_not_expression
+
+Computes the value of a C<!> pre-processing expression
+
+=cut
+
+sub pp_not_expression   { return ($_[1] // 0) ? $MarpaX::ESLIF::true : $MarpaX::ESLIF::false }
+
+=head3 pp_not_expression
+
+Computes the value of a C<!> pre-processing expression
+
+=cut
+
+sub pp_condition_symbol {
+    print STDERR "Origin: $_[1]\n";
+    my $normalizedSymbol = $_[0]->_normalized_condition_symbol($_[1]);
+    print STDERR "normalizedSymbol: $normalizedSymbol\n";
+    my $rc = $_[0]->{definitions}->{$normalizedSymbol} //= $MarpaX::ESLIF::false;
+    print STDERR "value: $rc\n";
+    
+    return $rc
+ }
+
 =head1 SEE ALSO
 
 L<MarpaX::ESLIF::ECMA334>
@@ -114,6 +180,20 @@ sub my_action {
 
     return { ruleName => $MarpaX::ESLIF::Context::ruleName,
              what => [ @args ] };
+}
+
+sub _normalized_condition_symbol {
+    #
+    # - Each unicode-escape-sequence is transformed into its corresponding Unicode character.
+    #     This is already the case by construction, because a conditional symbol is the
+    #     lexeme <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE> that a valuation of
+    #     the <identifier or keyword> grammar
+    # - Any formatting-characters are removed
+    #     We have to apply that
+    #
+    $_[1] =~ s/\p{Cf}//g;
+
+    return $_[1]
 }
 
 1;

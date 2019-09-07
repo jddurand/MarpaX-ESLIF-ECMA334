@@ -50,7 +50,7 @@ foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAG
 sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
-    my @r = $ecma334->parse(input => $input, encoding => $encoding, definitions => { TRUE => $MarpaX::ESLIF::true,  FALSE => $MarpaX::ESLIF::false });
+    my @r = $ecma334->parse(input => $input, encoding => $encoding, definitions => { 'TRUE' => $MarpaX::ESLIF::true });
     if ($want_ok && @r) {
         use Data::Scan::Printer;
         dspp($r[0])
@@ -66,7 +66,7 @@ done_testing();
 
 __DATA__
 __[ 001 ok / general ]__
-#if TEST // comment
+#if TRUE // comment
 /* comment */
   notvalid
 #endif

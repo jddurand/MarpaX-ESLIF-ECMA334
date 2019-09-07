@@ -51,7 +51,7 @@ The encoding of the data
 
 =item definitions
 
-A reference to a hash containing known definitions, where a true value means the symbol is set.
+A reference to a hash containing known definitions, where values must be a MarpaX::ESLIF boolean.
 
 =back
 
@@ -62,10 +62,21 @@ sub new {
 
     my $definitions = delete($options{definitions}) // {};
     croak 'definitions must be a HASH reference' unless ((ref($definitions) // '') eq 'HASH');
-    bless {
+    foreach (sort keys %{$definitions}) {
+        croak "$_ definition must be a MarpaX::ESLIF boolean" unless MarpaX::ESLIF::is_bool($definitions->{$_})
+    }
+
+    my $pp_expression_values = delete($options{pp_expressions_values}) // [];
+    croak 'pp_expression_values must be an ARRAY reference' unless ((ref($pp_expression_values) // '') eq 'ARRAY');
+    foreach (@{$pp_expression_values}) {
+        croak "$_ pp expression value must be a MarpaX::ESLIF boolean" unless MarpaX::ESLIF::is_bool($_)
+    }
+
+    return bless {
 	hasCompletion => 0,
 	recurseLevel => 0,
         definitions => $definitions,
+        pp_expression_values => $pp_expression_values,
 	%options}, $pkg
 }
 
@@ -215,6 +226,32 @@ sub A_unicode_escape_sequence_representing_a_character_of_the_class_Cf {
     ut8::upgrade($lexeme);
 
     return $self->_unicode_escape_sequence($lexeme) =~ /\p{Cf}/
+}
+
+sub definitions {
+    my ($self) = @_;
+
+    return $self->{definitions}
+}
+
+sub pp_expression_values {
+    my ($self) = @_;
+
+    return $self->{pp_expression_values}
+}
+
+sub pp_expression_values_push {
+    my ($self, $pp_expression_value) = @_;
+
+    croak "$pp_expression_value must be a MarpaX::ESLIF boolean" unless MarpaX::ESLIF::is_bool($pp_expression_value);
+
+    return push(@{$self->{pp_expression_values}}, $pp_expression_value)
+}
+
+sub pp_expression_values_pop {
+    my ($self) = @_;
+
+    return pop(@{$self->{pp_expression_values}}) // croak 'Unbalanced pp expression_values'
 }
 
 sub _unicode_escape_sequence {
