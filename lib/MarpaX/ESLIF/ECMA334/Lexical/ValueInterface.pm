@@ -151,7 +151,7 @@ Computes the value of a C<!> pre-processing expression
 
 =cut
 
-sub pp_not_expression   { return ($_[1] // 0) ? $MarpaX::ESLIF::true : $MarpaX::ESLIF::false }
+sub pp_not_expression   { return ($_[1] // 0) ? $MarpaX::ESLIF::false : $MarpaX::ESLIF::true }
 
 =head3 pp_not_expression
 

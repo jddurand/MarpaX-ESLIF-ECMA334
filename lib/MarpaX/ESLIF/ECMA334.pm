@@ -78,7 +78,9 @@ $log->debug('pp expression grammar compiled');
 sub new {
     my ($pkg) = @_;
 
-    return bless { last_pp_expression => $MarpaX::ESLIF::false }, $pkg
+    return bless {
+        last_pp_expression => $MarpaX::ESLIF::false,
+        ignore_last_pp_expression => 0}, $pkg
 }
 
 # ============================================================================
@@ -350,31 +352,6 @@ sub _lexicalEventManager {
                 if ($identifier_or_keyword ne 'true' && $identifier_or_keyword ne 'false') {
                     $match = $identifier_or_keyword;
                     $name = 'ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE';
-                }
-            }
-        }
-        elsif ($event eq '^pp_marker') {
-            #
-            # Note that pp_marker[] is a nulled event, i.e. it it ALWAYS before
-            # ^conditional_section_ok and ^conditional_section_ko events: this is
-            # perfect, because if <PP MARKER> matches, it invalidates the existence of a conditional section
-            # at the same location.
-            #
-            # We required that that input is entirely within a string
-            #
-            # We want to match:
-            # <whitespace opt> '#' <whitespace opt> PP_KEYWORD
-            # and will send a zero-length token if that is the case
-            #
-            my $input = $eslifRecognizer->input();
-            if (defined($input)) {
-                #
-                # can be undef at the very end
-                #
-                if ($eslifRecognizer->lexemeTry('PP MARKER')) {
-                    $log->noticef('[%2d] PP MARKER match', $eslifRecognizerInterface->recurseLevel);
-                    $match = '';
-                    $name = 'PP MARKER';
                 }
             }
         }
@@ -695,13 +672,22 @@ event ^keyword = predicted <keyword>
 #    <single line comment opt>
 # => For #endregion this is <pp message> instead, which I believe is an error. For #endregion <pp message>
 #    is changed to <pp endregion message> that uses <pp new line> instead of <new line>
-# => :discard is switched off when a pp directive is found by lookahead
+# => :discard is switched off when a pp directive is found
 # => :discard is switch on at the end of <pp directive>
 
+:lexeme ::= <PP DEFINE> pause => after event => :discard[switch]
+:lexeme ::= <PP UNDEF> pause => after event => :discard[switch]
+:lexeme ::= <PP IF> pause => after event => :discard[switch]
+:lexeme ::= <PP ELIF> pause => after event => :discard[switch]
+:lexeme ::= <PP ELSE> pause => after event => :discard[switch]
+:lexeme ::= <PP ENDIF> pause => after event => :discard[switch]
+:lexeme ::= <PP LINE> pause => after event => :discard[switch]
+:lexeme ::= <PP ERROR> pause => after event => :discard[switch]
+:lexeme ::= <PP WARNING> pause => after event => :discard[switch]
+:lexeme ::= <PP REGION> pause => after event => :discard[switch]
+:lexeme ::= <PP ENDREGION> pause => after event => :discard[switch]
+:lexeme ::= <PP PRAGMA> pause => after event => :discard[switch]
 event :discard[switch] = completed <pp directive>
-:lexeme ::= <PP MARKER> pause => after event => :discard[switch]
-event ^pp_marker = predicted <pp marker>
-<pp marker> ::= <PP MARKER>
 
 <pp directive> ::= <pp declaration>
                  | <pp conditional>
@@ -714,8 +700,8 @@ event ^conditional_symbol = predicted <conditional symbol>
 <conditional symbol> ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
 <whitespace opt> ::=
 <whitespace opt> ::= <whitespace>
-<pp declaration> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'define' <whitespace> <conditional symbol> <pp new line>
-                   | (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'undef'  <whitespace> <conditional symbol> <pp new line>
+<pp declaration> ::= <PP DEFINE> <whitespace> <conditional symbol> <pp new line>
+                   | <PP UNDEF> <whitespace> <conditional symbol> <pp new line>
 <pp new line> ::= <whitespace opt> <single line comment opt> <new line>
 <single line comment opt> ::=
 <single line comment opt> ::= <single line comment>
@@ -727,13 +713,13 @@ event ^pp_expression = predicted <pp expression>
 <pp elif sections opt> ::= <pp elif sections>
 <pp else section opt> ::=
 <pp else section opt> ::= <pp else section>
-<pp if section> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'if' <whitespace> <pp expression> <pp new line> <conditional section opt>
+<pp if section> ::= <PP IF> <whitespace> <pp expression> <pp new line> <conditional section opt>
 <conditional section opt> ::=
 <conditional section opt> ::= <conditional section>
 <pp elif sections> ::= <pp elif section>+
-<pp elif section> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'elif' <whitespace> <pp expression> <pp new line> <conditional section opt>
-<pp else section> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'else' <pp new line> <conditional section opt>
-<pp endif> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'endif' <pp new line>
+<pp elif section> ::= <PP ELIF> <whitespace> <pp expression> <pp new line> <conditional section opt>
+<pp else section> ::= <PP ELSE> <pp new line> <conditional section opt>
+<pp endif> ::= <PP ENDIF> <pp new line>
 
 event ^conditional_section_ok = predicted <conditional section ok>
 event ^conditional_section_ko = predicted <conditional section ko>
@@ -751,8 +737,8 @@ event ^conditional_section_ko = predicted <conditional section ko>
 <skipped characters> ::= <whitespace opt> <not number sign> <input characters opt>
 <not number sign> ::= /[^#]/u # Any input-character except #
 
-<pp diagnostic> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'error' <pp message>
-                  | (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'warning' <pp message>
+<pp diagnostic> ::= <PP ERROR> <pp message>
+                  | <PP WARNING> <pp message>
 <pp message> ::= <new line>
                | <whitespace> <input characters opt> <new line>
 
@@ -769,13 +755,13 @@ event ^conditional_section_ko = predicted <conditional section ko>
 #
 # <pp region> ::= <pp start region> <conditional section opt> <pp end region>
 <pp region> ::= <pp start region> <input section opt> <pp end region>
-<pp start region> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'region' <pp message>
+<pp start region> ::= <PP REGION> <pp message>
 # WAS: <pp end region> ::= <whitespace opt> '#' <whitespace opt> 'endregion' <pp message>
-<pp end region> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'endregion' <pp endregion message>
+<pp end region> ::= <PP ENDREGION> <pp endregion message>
 <pp endregion message> ::= <pp new line>
                          | <whitespace> <input characters opt> <pp new line>
 
-<pp line> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'line' <whitespace> <line indicator> <pp new line>
+<pp line> ::= <PP LINE> <whitespace> <line indicator> <pp new line>
 <line indicator> ::= <decimal digits> <whitespace> <file name>
                    | <decimal digits>
                    | 'default'
@@ -784,7 +770,7 @@ event ^conditional_section_ko = predicted <conditional section ko>
 <file name characters> ::= <file name character>+
 <file name character> ::= /[^\x{0022}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY INPUT CHARACTER EXCEPT 0022 AND NEW LINE CHARACTER>
 
-<pp pragma> ::= (- <pp marker> -) <whitespace opt> '#' <whitespace opt> 'pragma' <pp pragma text>
+<pp pragma> ::= <PP PRAGMA> <pp pragma text>
 <pp pragma text> ::= <new line>
                    | <whitespace> <input characters opt> <new line>
 
@@ -795,7 +781,18 @@ event ^conditional_section_ko = predicted <conditional section ko>
 <IDENTIFIER OR KEYWORD>                          ~ /[^\s\S]/ # Matches nothing
 <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE> ~ /[^\s\S]/ # Matches nothing
 <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD> ~ /[^\s\S]/ # Matches nothing
-<PP MARKER>                                      ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*(?:define|undef|if|elif|else|endif|line|error|region|endregion|pragma)/u
+<PP DEFINE>                                      ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*define/u
+<PP UNDEF>                                       ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*undef/u
+<PP IF>                                          ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*if/u
+<PP ELIF>                                        ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*elif/u
+<PP ELSE>                                        ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*else/u
+<PP ENDIF>                                       ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*endif/u
+<PP LINE>                                        ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*line/u
+<PP ERROR>                                       ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*error/u
+<PP WARNING>                                     ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*warning/u
+<PP REGION>                                      ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*region/u
+<PP ENDREGION>                                   ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*endregion/u
+<PP PRAGMA>                                      ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*pragma/u
 <CONDITIONAL SECTION OK>                         ~ /[^\s\S]/ # Matches nothing
 <CONDITIONAL SECTION KO>                         ~ /[^\s\S]/ # Matches nothing
 <PP EXPRESSION>                                  ~ /[^\s\S]/ # Matches nothing
