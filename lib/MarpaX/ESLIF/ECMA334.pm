@@ -80,7 +80,8 @@ sub new {
 
     return bless {
         last_pp_expression => undef,
-        can_next_conditional_section => []
+        can_next_conditional_section => [],
+        has_token => 0
     }, $pkg
 }
 
@@ -327,6 +328,12 @@ sub _lexicalEventManager {
 	    $log->debugf('[%2d] <pp expression> completion event', $eslifRecognizerInterface->recurseLevel);
             $eslifRecognizerInterface->hasCompletion(1);
         }
+        elsif ($event eq 'token$') {
+            $self->{has_token} = 1;
+        }
+        elsif ($event eq 'pp_declaration$') {
+            croak 'A <pp declaration> is allowed only before any token' if $self->{has_token};
+        }
         elsif ($event eq "pp_if_context[]") {
             if ($self->{last_pp_expression}) {
                 $log->noticef('[%2d] #if context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
@@ -487,6 +494,7 @@ __[ lexical grammar ]__
 <input elements>       ::= <input element>+
 <input element>        ::= <whitespace>
                          | <token>
+event token$ = completed <token>
 
 <new line> ::= /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
 
@@ -733,6 +741,7 @@ event ^conditional_symbol = predicted <conditional symbol>
 <whitespace opt> ::= <whitespace>
 <pp declaration> ::= <PP DEFINE> <whitespace> <conditional symbol> <pp new line>
                    | <PP UNDEF> <whitespace> <conditional symbol> <pp new line>
+event pp_declaration$ = completed <pp declaration>
 <pp new line> ::= <whitespace opt> <single line comment opt> <new line>
 <single line comment opt> ::=
 <single line comment opt> ::= <single line comment>
