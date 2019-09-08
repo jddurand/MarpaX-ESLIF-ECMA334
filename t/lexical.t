@@ -53,6 +53,7 @@ sub do_test {
     my @r = $ecma334->parse(input => $input, encoding => $encoding, definitions => { 'TRUE' => $MarpaX::ESLIF::true });
     if ($want_ok && @r) {
         use Data::Scan::Printer;
+        local %Data::Scan::Printer::Option = (with_deparse => 1, with_ansicolor => 0);
         dspp($r[0])
     }
 
