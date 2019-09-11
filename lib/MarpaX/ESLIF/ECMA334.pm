@@ -80,6 +80,7 @@ sub new {
 
     return bless {
         last_pp_expression => undef,
+        last_conditional_symbol => undef,
         can_next_conditional_section => [],
         has_token => 0
     }, $pkg
@@ -312,18 +313,25 @@ sub _lexicalEventManager {
         my ($identifier_or_keyword, $keyword, $match, $name, $pp_expression) = (undef, undef, undef, undef, undef);
 
         if ($event eq "'exhausted'") {
-	    $log->debugf('[%2d] Exhaustion event', $eslifRecognizerInterface->recurseLevel);
+	    $log->noticef('[%2d] Exhaustion event', $eslifRecognizerInterface->recurseLevel);
             $eslifRecognizerInterface->hasCompletion(1);
         }
         elsif ($event eq 'pp_expression$') {
-	    $log->debugf('[%2d] <pp expression> completion event', $eslifRecognizerInterface->recurseLevel);
+	    $log->noticef('[%2d] <pp expression> completion event', $eslifRecognizerInterface->recurseLevel);
             $eslifRecognizerInterface->hasCompletion(1);
         }
         elsif ($event eq 'token$') {
             $self->{has_token} = 1;
         }
-        elsif ($event eq 'pp_declaration$') {
-            croak 'A <pp declaration> is allowed only before any token' if $self->{has_token};
+        elsif ($event eq 'pp_declaration_define$') {
+            croak 'A #define declaration is allowed only before any token' if $self->{has_token};
+	    $log->noticef('[%2d] #define %s', $eslifRecognizerInterface->recurseLevel, $self->{last_conditional_symbol});
+            $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::true;
+        }
+        elsif ($event eq 'pp_declaration_undef$') {
+            croak 'An #undef declaration is allowed only before any token' if $self->{has_token};
+	    $log->noticef('[%2d] #undef %s', $eslifRecognizerInterface->recurseLevel, $self->{last_conditional_symbol});
+            $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false;
         }
         elsif ($event eq "pp_if_context[]") {
             if ($self->{last_pp_expression}) {
@@ -405,6 +413,7 @@ sub _lexicalEventManager {
                 if ($identifier_or_keyword ne 'true' && $identifier_or_keyword ne 'false') {
                     $match = $identifier_or_keyword;
                     $name = 'ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE';
+                    $self->{last_conditional_symbol} = $match;
                 }
             }
         }
@@ -425,7 +434,7 @@ sub _lexicalEventManager {
         }
 
 	if (defined($match)) {
-            # $log->debugf('[%2d] Event %s matches lexeme %s: %s', $eslifRecognizerInterface->recurseLevel, $event, $name, $match);
+            # $log->noticef('[%2d] Event %s matches lexeme %s: %s', $eslifRecognizerInterface->recurseLevel, $event, $name, $match);
             my $length = bytes::length($match);
             if ($length >= $latm) {
                 if ($length > $latm) {
@@ -435,22 +444,22 @@ sub _lexicalEventManager {
                 push(@matches, { match => $match, name => $name });
             }
         } else {
-            # $log->debugf('[%2d] Event %s matches no lexeme', $eslifRecognizerInterface->recurseLevel, $event);
+            # $log->noticef('[%2d] Event %s matches no lexeme', $eslifRecognizerInterface->recurseLevel, $event);
         }
     }
 
     if ($latm >= 0) {
         foreach (@matches) {
-	    # $log->debugf('[%2d] Lexeme alternative: %s: %s', $eslifRecognizerInterface->recurseLevel, $_->{name}, $_->{match});
+	    # $log->noticef('[%2d] Lexeme alternative: %s: %s', $eslifRecognizerInterface->recurseLevel, $_->{name}, $_->{match});
             $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{match})
         }
-        # $log->debugf('[%2d] Lexeme complete on %d bytes', $eslifRecognizerInterface->recurseLevel, $latm);
+        # $log->noticef('[%2d] Lexeme complete on %d bytes', $eslifRecognizerInterface->recurseLevel, $latm);
         $self->_error('lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
     } else {
-        # $log->debugf('[%2d] Events: no lexeme', $eslifRecognizerInterface->recurseLevel, \@events);
+        # $log->noticef('[%2d] Events: no lexeme', $eslifRecognizerInterface->recurseLevel, \@events);
     }
 
-    # $log->debugf('[%2d] Events: %d matches', $eslifRecognizerInterface->recurseLevel, \@events, scalar(@matches));
+    # $log->noticef('[%2d] Events: %d matches', $eslifRecognizerInterface->recurseLevel, \@events, scalar(@matches));
 }
 
 1;
@@ -730,9 +739,12 @@ event ^conditional_symbol = predicted <conditional symbol>
 <conditional symbol> ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
 <whitespace opt> ::=
 <whitespace opt> ::= <whitespace>
-<pp declaration> ::= <PP DEFINE> <whitespace> <conditional symbol> <pp new line>
-                   | <PP UNDEF> <whitespace> <conditional symbol> <pp new line>
-event pp_declaration$ = completed <pp declaration>
+<pp declaration define> ::= <PP DEFINE> <whitespace> <conditional symbol> <pp new line>
+<pp declaration undef> ::= <PP UNDEF> <whitespace> <conditional symbol> <pp new line>
+<pp declaration> ::= <pp declaration define>
+                   | <pp declaration undef>
+event pp_declaration_define$ = completed <pp declaration define>
+event pp_declaration_undef$ = completed <pp declaration undef>
 <pp new line> ::= <whitespace opt> <single line comment opt> <new line>
 <single line comment opt> ::=
 <single line comment opt> ::= <single line comment>
