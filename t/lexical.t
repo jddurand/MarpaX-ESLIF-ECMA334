@@ -50,7 +50,7 @@ foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAG
 sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
-    my @r = $ecma334->parse(input => $input, encoding => $encoding, definitions => { 'TRUE' => $MarpaX::ESLIF::true });
+    my @r = eval { $ecma334->parse(input => $input, encoding => $encoding, definitions => { 'TRUE' => $MarpaX::ESLIF::true }) };
     if ($want_ok && @r) {
         use Data::Scan::Printer;
         local %Data::Scan::Printer::Option = (with_deparse => 1, with_ansicolor => 0);
@@ -122,7 +122,76 @@ namespace NeticaDemo
         }
     }
 }
-__[ 005 ok / general ]__
-#if TEST
-
+__[ 003 ok / pre-processing ]__
+#define A
+#undef B
+class C
+{
+#if A
+void F() {}
+#else
+void G() {}
 #endif
+#if B
+void H() {}
+#else
+void I() {}
+#endif
+}
+__[004 ok / pre-processing ]_
+#define Enterprise
+#if Professional || Enterprise
+#define Advanced
+#endif
+namespace Megacorp.Data
+{
+#if Advanced
+class PivotTable {...}
+#endif
+}
+__[005 ko / pre-processing: #define after any token ]_
+#define A
+namespace N
+{
+#define B
+#if B
+class Class1 {}
+#endif
+}
+__[006 ok / pre-processing: two #define ]__
+#define A
+#define A
+__[007 ok / pre-processing: two #undef ]__
+#define A
+#undef A
+#undef A
+__[007 ok / pre-preprocessing: nested conditional sections ]__
+#define Debug
+#undef Trace
+// Debugging on
+// Tracing off
+class PurchaseTransaction
+{
+  void Commit() {
+#if Debug
+    CheckConsistency();
+  #if Trace
+    WriteToLog(this.ToString());
+  #endif
+#endif
+  CommitHelper();
+  }
+}
+__[008 ok / pre-processing: invalid comment but inside a skipped section ]__
+#define Debug
+// Debugging on
+class PurchaseTransaction
+{
+  void Commit() {
+#if Debug
+    CheckConsistency();
+#else
+    /* Do something else
+#endif
+  }
+}

@@ -78,12 +78,19 @@ $log->debug('pp expression grammar compiled');
 sub new {
     my ($pkg) = @_;
 
-    return bless {
-        last_pp_expression => undef,
-        last_conditional_symbol => undef,
-        can_next_conditional_section => [],
-        has_token => 0
-    }, $pkg
+    return bless {}, $pkg
+}
+
+# ============================================================================
+# _init
+# ============================================================================
+sub _init {
+    my ($self) = @_;
+
+    $self->{last_pp_expression} = undef;
+    $self->{last_conditional_symbol} = undef;
+    $self->{can_next_conditional_section} = [];
+    $self->{has_token} = 0;
 }
 
 # ============================================================================
@@ -92,6 +99,10 @@ sub new {
 sub parse {
     my ($self, %options) = @_;
 
+    #
+    # Init
+    #
+    $self->_init();
     #
     # Pre-parse
     #
@@ -207,7 +218,7 @@ sub _parse {
 sub _identifier_or_keyword {
     my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
 
-    $log->debugf('[%2d] Trying grammar %s', $eslifRecognizerInterface->recurseLevel, '<identifier or keyword>');
+    $log->noticef('[%2d] Trying grammar %s', $eslifRecognizerInterface->recurseLevel, '<identifier or keyword>');
 
     my $identifier_or_keyword = eval {
         $self->_parse($IDENTIFIER_OR_KEYWORD_GRAMMAR,
@@ -221,6 +232,8 @@ sub _identifier_or_keyword {
                       encoding => 'UTF-8',
                       definitions => $eslifRecognizerInterface->definitions);
     };
+
+    $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<identifier or keyword>', $identifier_or_keyword);
 
     return $identifier_or_keyword;
 }
@@ -243,13 +256,15 @@ sub _pp_expression {
                       definitions => $eslifRecognizerInterface->definitions);
     };
 
+    $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<pp expression>', $pp_expression);
+
     return $pp_expression;
 }
 
 sub _keyword {
     my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
 
-    $log->debugf('[%2d] Trying grammar %s', $eslifRecognizerInterface->recurseLevel, '<keyword>');
+    $log->noticef('[%2d] Trying grammar %s', $eslifRecognizerInterface->recurseLevel, '<keyword>');
     
     my $keyword = eval {
         $self->_parse($KEYWORD_GRAMMAR,
@@ -263,6 +278,8 @@ sub _keyword {
                       encoding => 'UTF-8',
                       definitions => $eslifRecognizerInterface->definitions);
     };
+
+    $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<keyword>', $keyword);
 
     return $keyword;
 }
@@ -309,6 +326,11 @@ sub _lexicalEventManager {
     my @matches;
     my $latm = -1;
 
+    {
+        my $input = (split(/\R/, $eslifRecognizer->input // ''))[0];
+        $log->noticef('[%2d] Input: %s', $eslifRecognizerInterface->recurseLevel, $input);
+    }
+
     foreach my $event (@events) {
         my ($identifier_or_keyword, $keyword, $match, $name, $pp_expression) = (undef, undef, undef, undef, undef);
 
@@ -320,16 +342,23 @@ sub _lexicalEventManager {
 	    $log->noticef('[%2d] <pp expression> completion event', $eslifRecognizerInterface->recurseLevel);
             $eslifRecognizerInterface->hasCompletion(1);
         }
+        elsif ($event eq 'identifier_or_keyword$') {
+	    $log->noticef('[%2d] <identifier or keyword> completion event', $eslifRecognizerInterface->recurseLevel);
+            $eslifRecognizerInterface->hasCompletion(1);
+        }
         elsif ($event eq 'token$') {
-            $self->{has_token} = 1;
+            if (! $eslifRecognizerInterface->recurseLevel) {
+                $log->noticef('[%2d] <token> completion event', $eslifRecognizerInterface->recurseLevel);
+                $self->{has_token} = 1
+            }
         }
         elsif ($event eq 'pp_declaration_define$') {
-            croak 'A #define declaration is allowed only before any token' if $self->{has_token};
+            croak 'A #define declaration is not allowed after any token' if $self->{has_token};
 	    $log->noticef('[%2d] #define %s', $eslifRecognizerInterface->recurseLevel, $self->{last_conditional_symbol});
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::true;
         }
         elsif ($event eq 'pp_declaration_undef$') {
-            croak 'An #undef declaration is allowed only before any token' if $self->{has_token};
+            croak 'An #undef declaration is not allowed after any token' if $self->{has_token};
 	    $log->noticef('[%2d] #undef %s', $eslifRecognizerInterface->recurseLevel, $self->{last_conditional_symbol});
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false;
         }
@@ -350,33 +379,31 @@ sub _lexicalEventManager {
             #
             # We depend on the previous 'if' of 'elif' use of conditional section
             #
-            if ($self->{can_next_conditional_section}->[-1]) {
-                if ($self->{last_pp_expression}) {
-                    $log->noticef('[%2d] #elif context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
-                    $match = '';
-                    $name = 'CONDITIONAL SECTION OK';
-                    $self->{can_next_conditional_section}->[-1] = 0;
-                } else {
-                    $log->noticef('[%2d] #elif context: CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
-                    $match = '';
-                    $name = 'CONDITIONAL SECTION KO';
-                }
+            my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // croak 'Unbalanced #if/#elif';
+            if ($can_next_conditional_section && $self->{last_pp_expression}) {
+                $log->noticef('[%2d] #elif context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
+                $match = '';
+                $name = 'CONDITIONAL SECTION OK';
+                $self->{can_next_conditional_section}->[-1] = 0;
+            } else {
+                $log->noticef('[%2d] #elif context: CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
+                $match = '';
+                $name = 'CONDITIONAL SECTION KO';
             }
         }
         elsif ($event eq "pp_else_context[]") {
             #
             # We depend on the previous 'if' of 'elif' use of conditional section
             #
-            if ($self->{can_next_conditional_section}->[-1]) {
-                if ($self->{last_pp_expression}) {
-                    $log->noticef('[%2d] #else context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
-                    $match = '';
-                    $name = 'CONDITIONAL SECTION OK';
-                } else {
-                    $log->noticef('[%2d] #else context: CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
-                    $match = '';
-                    $name = 'CONDITIONAL SECTION KO';
-                }
+            my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // croak 'Unbalanced #if/#elif';
+            if ($can_next_conditional_section && ! $self->{last_pp_expression}) {
+                $log->noticef('[%2d] #else context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
+                $match = '';
+                $name = 'CONDITIONAL SECTION OK';
+            } else {
+                $log->noticef('[%2d] #else context: CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
+                $match = '';
+                $name = 'CONDITIONAL SECTION KO';
             }
         }
         elsif ($event eq "pp_endif_context[]") {
@@ -849,6 +876,8 @@ event pp_endif_context[] = nulled <pp endif context>
 __[ identifier or keyword grammar ]__
 :default ::= action => ::convert[UTF-8]
 :desc ::= 'Identifier or Keyword grammar'
+
+event identifier_or_keyword$ = completed <identifier or keyword>
 
 <identifier or keyword> ::= <identifier start character> <identifier part characters opt>
 <identifier part characters opt> ::=
