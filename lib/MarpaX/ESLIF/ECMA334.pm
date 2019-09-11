@@ -168,15 +168,6 @@ sub _parse {
     # ------------------------
     my $eslifRecognizer = defined($sharedEslifRecognizer) ? $sharedEslifRecognizer->newFrom($eslifGrammar) : MarpaX::ESLIF::Recognizer->new($eslifGrammar, $eslifRecognizerInterface);
 
-    # -------------------------------------------------------------------------
-    # Make sure all data (that is recognizer interface memory) is seen by ESLIF
-    # -------------------------------------------------------------------------
-    croak 'read failure' unless $eslifRecognizer->isEof() || $eslifRecognizer->read();
-    #
-    # Input must be defined
-    #
-    croak 'undefined input' unless defined $eslifRecognizer->input();
-
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
     # -----------------------------------------------------
@@ -201,7 +192,7 @@ sub _parse {
     }
 
     # -----------------------------------------------------------------------------------------
-    # Call for valuation (we configured value interface to not accept ambiguity not null parse)
+    # Call for valuation (we configured value interface to not accept ambiguity nor null parse)
     # -----------------------------------------------------------------------------------------
     my $value = MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface);
     croak 'Valuation failure' unless $value->value();
