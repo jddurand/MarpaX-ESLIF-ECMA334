@@ -180,14 +180,28 @@ sub _parse {
     # ------------------------
     my $eslifRecognizer = defined($sharedEslifRecognizer) ? $sharedEslifRecognizer->newFrom($eslifGrammar) : MarpaX::ESLIF::Recognizer->new($eslifGrammar, $eslifRecognizerInterface);
 
+    # --------------------------------------------------------------------
+    # Because we may have prediction events even before the first read
+    # the input may be undef. If that is the case, we read it. This can
+    # happen only once in the whole life of parsing, including sub parses.
+    # --------------------------------------------------------------------
+    if (! defined($eslifRecognizer->input)) {
+        $eslifRecognizer->read || croak 'Initial read failed';
+    }
+
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
     # -----------------------------------------------------
     $eslifRecognizer->scan(1) || croak 'Initial scan failed';
-    $self->$eventManager($eslifRecognizer, $eslifRecognizerInterface);
+
     if ($eslifRecognizer->isCanContinue) {
         {
             do {
+                # ------------------------------------------------------------
+                # Event loop can do a lexeme complete that triggers new events
+                # ------------------------------------------------------------
+                while ($self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)) {
+                }
                 if (! $eslifRecognizer->resume) {
                     #
                     # This is a failure unless it is a sub-grammar that has reached completion at least once
@@ -198,8 +212,13 @@ sub _parse {
                         croak 'resume() failed';
                     }
                 }
-                $self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)
             } while ($eslifRecognizer->isCanContinue)
+        }
+    } else {
+        # ------------------------------------------------------------
+        # Event loop can do a lexeme complete that triggers new events
+        # ------------------------------------------------------------
+        while ($self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)) {
         }
     }
 
@@ -232,8 +251,11 @@ sub _identifier_or_keyword {
                       encoding => 'UTF-8',
                       definitions => $eslifRecognizerInterface->definitions);
     };
-
-    $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<identifier or keyword>', $identifier_or_keyword);
+    if ($@) {
+        $log->noticef('[%2d] Failure of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<identifier or keyword>', $@);
+    } else {
+        $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<identifier or keyword>', $identifier_or_keyword);
+    }
 
     return $identifier_or_keyword;
 }
@@ -256,7 +278,11 @@ sub _pp_expression {
                       definitions => $eslifRecognizerInterface->definitions);
     };
 
-    $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<pp expression>', $pp_expression);
+    if ($@) {
+        $log->noticef('[%2d] Failure of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<pp expression>', $@);
+    } else {
+        $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<pp expression>', $pp_expression);
+    }
 
     return $pp_expression;
 }
@@ -279,7 +305,11 @@ sub _keyword {
                       definitions => $eslifRecognizerInterface->definitions);
     };
 
-    $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<keyword>', $keyword);
+    if ($@) {
+        $log->noticef('[%2d] Failure of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<keyword>', $@);
+    } else {
+        $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<keyword>', $keyword);
+    }
 
     return $keyword;
 }
@@ -311,8 +341,13 @@ sub _error {
     croak sprintf($fmt, @args);
 }
 
+#
+# The event manager must always return a true value it it has performed a lexeme complete
+#
 sub _lexicalEventManager {
     my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
+
+    my $rc = 0;
 
     my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
     $log->noticef('[%2d] Events  : %s', $eslifRecognizerInterface->recurseLevel, \@events);
@@ -475,18 +510,43 @@ sub _lexicalEventManager {
         }
     }
 
+    if ($latm > 0) {
+        #
+        # We do nothing if :discard applies and matches at least $latm bytes
+        #
+        if (eval { $eslifRecognizer->discardTry() }) {
+            my $discardBytes = $eslifRecognizer->discardLastsTry();
+            if (bytes::length($discardBytes) >= $latm) {
+                $log->noticef('[%2d] :discard try successful and its length is %d >= %d (latm)', $eslifRecognizerInterface->recurseLevel, bytes::length($discardBytes), $latm);
+                $latm = -1;
+            } else {
+                $log->noticef('[%2d] :discard try successful but its length is %d < %d (latm)', $eslifRecognizerInterface->recurseLevel, bytes::length($discardBytes), $latm);
+            }
+        } else {
+            $log->noticef('[%2d] :discard try failure while latm length is %d', $eslifRecognizerInterface->recurseLevel, $latm);
+        }
+    }
     if ($latm >= 0) {
         foreach (@matches) {
-	    # $log->noticef('[%2d] Lexeme alternative: %s: %s', $eslifRecognizerInterface->recurseLevel, $_->{name}, $_->{match});
-            $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{match})
+	    $log->noticef('[%2d] Lexeme alternative: %s: %s', $eslifRecognizerInterface->recurseLevel, $_->{name}, $_->{match});
+            $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{match});
+            if ($_->{name} eq 'CONDITIONAL SECTION OK') {
+                #
+                # Enable :discard
+                #
+                $log->noticef('[%2d] Lexeme alternative: %s: putting :discard on%s', $eslifRecognizerInterface->recurseLevel, $_->{name});
+                $eslifRecognizer->hookDiscard(1);
+            }
         }
-        # $log->noticef('[%2d] Lexeme complete on %d bytes', $eslifRecognizerInterface->recurseLevel, $latm);
+        $log->noticef('[%2d] Lexeme complete on %d bytes', $eslifRecognizerInterface->recurseLevel, $latm);
         $self->_error('lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
+        $rc = 1;
     } else {
-        # $log->noticef('[%2d] Events: no lexeme', $eslifRecognizerInterface->recurseLevel, \@events);
+        $log->noticef('[%2d] No lexeme', $eslifRecognizerInterface->recurseLevel, \@events);
     }
 
     # $log->noticef('[%2d] Events: %d matches', $eslifRecognizerInterface->recurseLevel, \@events, scalar(@matches));
+    return $rc;
 }
 
 1;
@@ -741,19 +801,28 @@ event ^keyword = predicted <keyword>
 # => :discard is switched off when a pp directive is found
 # => :discard is switch on at the end of <pp directive>
 
-:lexeme ::= <PP DEFINE> pause => after event => :discard[switch]
-:lexeme ::= <PP UNDEF> pause => after event => :discard[switch]
-:lexeme ::= <PP IF> pause => after event => :discard[switch]
-:lexeme ::= <PP ELIF> pause => after event => :discard[switch]
-:lexeme ::= <PP ELSE> pause => after event => :discard[switch]
-:lexeme ::= <PP ENDIF> pause => after event => :discard[switch]
-:lexeme ::= <PP LINE> pause => after event => :discard[switch]
-:lexeme ::= <PP ERROR> pause => after event => :discard[switch]
-:lexeme ::= <PP WARNING> pause => after event => :discard[switch]
-:lexeme ::= <PP REGION> pause => after event => :discard[switch]
-:lexeme ::= <PP ENDREGION> pause => after event => :discard[switch]
-:lexeme ::= <PP PRAGMA> pause => after event => :discard[switch]
-event :discard[switch] = completed <pp directive>
+#
+# Inside a <pp directive>, discard is always switched off
+# Note that in case of an "ok" <conditional section>, discard
+# is explicitly reswitched on, and this happens before the end of
+# <pp if>, <pp elif> or <pp else> directives
+#
+:lexeme ::= <PP DEFINE> pause => after event => :discard[off]
+:lexeme ::= <PP UNDEF> pause => after event => :discard[off]
+:lexeme ::= <PP IF> pause => after event => :discard[off]
+:lexeme ::= <PP ELIF> pause => after event => :discard[off]
+:lexeme ::= <PP ELSE> pause => after event => :discard[off]
+:lexeme ::= <PP ENDIF> pause => after event => :discard[off]
+:lexeme ::= <PP LINE> pause => after event => :discard[off]
+:lexeme ::= <PP ERROR> pause => after event => :discard[off]
+:lexeme ::= <PP WARNING> pause => after event => :discard[off]
+:lexeme ::= <PP REGION> pause => after event => :discard[off]
+:lexeme ::= <PP ENDREGION> pause => after event => :discard[off]
+:lexeme ::= <PP PRAGMA> pause => after event => :discard[off]
+#
+# Whatever happened, discard is always switched on at the end of <pp directive>
+#
+event :discard[on] = completed <pp directive>
 
 <pp directive> ::= <pp declaration>
                  | <pp conditional>
