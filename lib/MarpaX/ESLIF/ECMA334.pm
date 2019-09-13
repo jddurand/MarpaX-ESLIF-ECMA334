@@ -686,7 +686,11 @@ event ^keyword = predicted <keyword>
               | <simple escape sequence>
               | <hexadecimal escape sequence>
               | <unicode escape sequence>
-<single character> ::= /[^\x{0027}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0027 005C AND NEW LINE CHARACTER>
+#
+# If the value represented by a character literal is greater than U+FFFF , a compile-time error occurs.
+#
+:lexeme ::= <SINGLE CHARACTER> if-action => single_character_is_below_0xFFFF
+<single character> ::= <SINGLE CHARACTER>
 
 <simple escape sequence> ::= "\\'"
                            | '\\"'
@@ -713,7 +717,8 @@ event ^keyword = predicted <keyword>
                                      | <simple escape sequence>
                                      | <hexadecimal escape sequence>
                                      | <unicode escape sequence>
-<single regular string literal character> ::= /[^\x{0022}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0022 005C AND NEW LINE CHARACTER>
+:lexeme ::= <SINGLE REGULAR STRING LITERAL CHARACTER> if-action => single_regular_string_literal_character_is_below_0xFFFF
+<single regular string literal character> ::= <SINGLE REGULAR STRING LITERAL CHARACTER>
 
 <verbatim string literal> ::= '@"' <verbatim string literal characters opt> '"'
 <verbatim string literal characters opt> ::=
@@ -912,6 +917,8 @@ event :discard[off] = predicted <skipped section>
 #
 # Lexemes
 #
+<SINGLE CHARACTER>                               ~ /[^\x{0027}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0027 005C AND NEW LINE CHARACTER>
+<SINGLE REGULAR STRING LITERAL CHARACTER>        ~ /[^\x{0022}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0022 005C AND NEW LINE CHARACTER>
 <KEYWORD>                                        ~ /[^\s\S]/ # Matches nothing
 <IDENTIFIER OR KEYWORD>                          ~ /[^\s\S]/ # Matches nothing
 <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE> ~ /[^\s\S]/ # Matches nothing

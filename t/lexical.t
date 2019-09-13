@@ -230,3 +230,7 @@ class Class1
     cl\u0061ss.st\u0061tic(true);
   }
 }
+__[012 ko / single character is below 0xFFFF ]__
+string X = '🍄';
+__[012 ko / single regular string literal character is below 0xFFFF ]__
+string X = "🍄";

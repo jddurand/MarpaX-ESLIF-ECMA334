@@ -243,6 +243,22 @@ sub pp_expression_values_pop {
     return pop(@{$self->{pp_expression_values}}) // croak 'Unbalanced pp expression_values'
 }
 
+sub single_character_is_below_0xFFFF {
+    my ($self, $lexeme) = @_;
+
+    utf8::decode($lexeme);
+
+    return ord($lexeme) < 0xFFFF
+}
+
+sub single_regular_string_literal_character_is_below_0xFFFF {
+    my ($self, $lexeme) = @_;
+
+    utf8::decode($lexeme);
+
+    return ord($lexeme) < 0xFFFF
+}
+
 =head1 SEE ALSO
 
 L<MarpaX::ESLIF::ECMA404>
