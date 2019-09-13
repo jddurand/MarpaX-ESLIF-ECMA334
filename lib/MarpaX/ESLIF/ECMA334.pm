@@ -358,7 +358,7 @@ sub _lexicalEventManager {
     #
     # At any predicted event, we have two possible sub-grammars
     #
-    my @matches;
+    my @alternatives;
     my $latm = -1;
 
     {
@@ -367,7 +367,7 @@ sub _lexicalEventManager {
     }
 
     foreach my $event (@events) {
-        my ($identifier_or_keyword, $keyword, $match, $name, $pp_expression) = (undef, undef, undef, undef, undef);
+        my ($identifier_or_keyword, $keyword, $match, $name, $value, $pp_expression) = (undef, undef, undef, undef, undef, undef);
 
         if ($event eq "'exhausted'") {
 	    $log->noticef('[%2d] Exhaustion event', $eslifRecognizerInterface->recurseLevel);
@@ -401,11 +401,13 @@ sub _lexicalEventManager {
             if ($self->{last_pp_expression}) {
                 $log->noticef('[%2d] #if context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
+                $value = undef;
                 $name = 'CONDITIONAL SECTION OK';
                 push(@{$self->{can_next_conditional_section}}, 0);
             } else {
                 $log->noticef('[%2d] #if context: CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
+                $value = undef;
                 $name = 'CONDITIONAL SECTION KO';
                 push(@{$self->{can_next_conditional_section}}, 1);
             }
@@ -418,11 +420,13 @@ sub _lexicalEventManager {
             if ($can_next_conditional_section && $self->{last_pp_expression}) {
                 $log->noticef('[%2d] #elif context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
+                $value = undef;
                 $name = 'CONDITIONAL SECTION OK';
                 $self->{can_next_conditional_section}->[-1] = 0;
             } else {
                 $log->noticef('[%2d] #elif context: CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
+                $value = undef;
                 $name = 'CONDITIONAL SECTION KO';
             }
         }
@@ -434,10 +438,12 @@ sub _lexicalEventManager {
             if ($can_next_conditional_section && ! $self->{last_pp_expression}) {
                 $log->noticef('[%2d] #else context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
+                $value = undef;
                 $name = 'CONDITIONAL SECTION OK';
             } else {
                 $log->noticef('[%2d] #else context: CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
+                $value = undef;
                 $name = 'CONDITIONAL SECTION KO';
             }
         }
@@ -451,6 +457,7 @@ sub _lexicalEventManager {
                 $keyword //= $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
                 if (! defined($keyword)) {
                     $match = $identifier_or_keyword;
+                    $value = $identifier_or_keyword;
                     $name = 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD';
                 }
             }
@@ -459,6 +466,7 @@ sub _lexicalEventManager {
             $keyword //= $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
             if (defined($keyword)) {
                 $match = $keyword;
+                $value = $keyword;
                 $name = 'KEYWORD';
             }
         }
@@ -466,6 +474,7 @@ sub _lexicalEventManager {
             $identifier_or_keyword //= $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
             if (defined($identifier_or_keyword)) {
                 $match = $identifier_or_keyword;
+                $value = $identifier_or_keyword;
                 $name = 'IDENTIFIER OR KEYWORD';
             }
         }
@@ -474,6 +483,7 @@ sub _lexicalEventManager {
             if (defined($identifier_or_keyword)) {
                 if ($identifier_or_keyword ne 'true' && $identifier_or_keyword ne 'false') {
                     $match = $identifier_or_keyword;
+                    $value = $identifier_or_keyword;
                     $name = 'ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE';
                     $self->{last_conditional_symbol} = $match;
                 }
@@ -489,6 +499,7 @@ sub _lexicalEventManager {
             #
             $self->{last_pp_expression} = $pp_expression;
             $match = '';
+            $value = $pp_expression;
             $name = 'PP EXPRESSION';
         }
         else {
@@ -496,47 +507,23 @@ sub _lexicalEventManager {
         }
 
 	if (defined($match)) {
-            # $log->noticef('[%2d] Event %s matches lexeme %s: %s', $eslifRecognizerInterface->recurseLevel, $event, $name, $match);
             my $length = bytes::length($match);
             if ($length >= $latm) {
                 if ($length > $latm) {
-                    @matches = ();
+                    @alternatives = ();
                     $latm = $length;
                 }
-                push(@matches, { match => $match, name => $name });
+                push(@alternatives, { match => $match, name => $name, value => $value });
             }
         } else {
             # $log->noticef('[%2d] Event %s matches no lexeme', $eslifRecognizerInterface->recurseLevel, $event);
         }
     }
 
-    if ($latm > 0) {
-        #
-        # We do nothing if :discard applies and matches at least $latm bytes
-        #
-        if (eval { $eslifRecognizer->discardTry() }) {
-            my $discardBytes = $eslifRecognizer->discardLastsTry();
-            if (bytes::length($discardBytes) >= $latm) {
-                $log->noticef('[%2d] :discard try successful and its length is %d >= %d (latm)', $eslifRecognizerInterface->recurseLevel, bytes::length($discardBytes), $latm);
-                $latm = -1;
-            } else {
-                $log->noticef('[%2d] :discard try successful but its length is %d < %d (latm)', $eslifRecognizerInterface->recurseLevel, bytes::length($discardBytes), $latm);
-            }
-        } else {
-            $log->noticef('[%2d] :discard try failure while latm length is %d', $eslifRecognizerInterface->recurseLevel, $latm);
-        }
-    }
     if ($latm >= 0) {
-        foreach (@matches) {
-	    $log->noticef('[%2d] Lexeme alternative: %s: %s', $eslifRecognizerInterface->recurseLevel, $_->{name}, $_->{match});
-            $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{match});
-            if ($_->{name} eq 'CONDITIONAL SECTION OK') {
-                #
-                # Enable :discard
-                #
-                $log->noticef('[%2d] Lexeme alternative: %s: putting :discard on%s', $eslifRecognizerInterface->recurseLevel, $_->{name});
-                $eslifRecognizer->hookDiscard(1);
-            }
+        foreach (@alternatives) {
+	    $log->noticef('[%2d] Lexeme alternative: %s: %s', $eslifRecognizerInterface->recurseLevel, $_->{name}, $_->{value});
+            $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value});
         }
         $log->noticef('[%2d] Lexeme complete on %d bytes', $eslifRecognizerInterface->recurseLevel, $latm);
         $self->_error('lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
@@ -545,7 +532,7 @@ sub _lexicalEventManager {
         $log->noticef('[%2d] No lexeme', $eslifRecognizerInterface->recurseLevel, \@events);
     }
 
-    # $log->noticef('[%2d] Events: %d matches', $eslifRecognizerInterface->recurseLevel, \@events, scalar(@matches));
+    # $log->noticef('[%2d] Events: %d matches', $eslifRecognizerInterface->recurseLevel, \@events, scalar(@alternatives));
     return $rc;
 }
 
@@ -600,7 +587,8 @@ event token$ = completed <token>
 <delimited comment text opt> ::=
 <delimited comment text opt> ::= <delimited comment text>
 <delimited comment text>     ::= <delimited comment section>+
-<delimited comment section>  ::= '/' <asterisks opt> <not slash or asterisk>
+<delimited comment section>  ::= '/'
+                               | <asterisks opt> <not slash or asterisk>
 <asterisks opt>              ::=
 <asterisks opt>              ::= <asterisks>
 <asterisks>                  ::= '*'+
@@ -798,8 +786,9 @@ event ^keyword = predicted <keyword>
 #    <single line comment opt>
 # => For #endregion this is <pp message> instead, which I believe is an error. For #endregion <pp message>
 #    is changed to <pp endregion message> that uses <pp new line> instead of <new line>
-# => :discard is switched off when a pp directive is found
-# => :discard is switch on at the end of <pp directive>
+# => :discard is switched off when a pp keyword is found (#if, #endif, etc...)
+# => :discard is switch on at the end of <pp new line>
+# => :discard is switch off explicitly again if we enter a skipped section
 
 #
 # Inside a <pp directive>, discard is always switched off
@@ -820,9 +809,9 @@ event ^keyword = predicted <keyword>
 :lexeme ::= <PP ENDREGION> pause => after event => :discard[off]
 :lexeme ::= <PP PRAGMA> pause => after event => :discard[off]
 #
-# Whatever happened, discard is always switched on at the end of <pp directive>
+# Whatever happened, discard is always switched on at the end of <pp new line>
 #
-event :discard[on] = completed <pp directive>
+event :discard[on] = completed <pp new line>
 
 <pp directive> ::= <pp declaration>
                  | <pp conditional>
@@ -874,6 +863,7 @@ event pp_endif_context[] = nulled <pp endif context>
 
 <conditional section> ::= (- <CONDITIONAL SECTION OK> -) <input section>
                         | (- <CONDITIONAL SECTION KO> -) <skipped section>
+event :discard[off] = predicted <skipped section>
 <skipped section> ::= <skipped section part>+
 <skipped section part> ::= <skipped characters opt> <new line>
                          | <pp directive>

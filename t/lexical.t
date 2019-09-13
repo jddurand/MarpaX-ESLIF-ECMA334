@@ -50,7 +50,6 @@ foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAG
 sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
-    return unless $name =~ /010/;
     my @r = eval { $ecma334->parse(input => $input, encoding => $encoding, definitions => { 'TRUE' => $MarpaX::ESLIF::true }) };
     if ($want_ok && @r) {
         use Data::Scan::Printer;
@@ -210,7 +209,6 @@ class Hello
   }
 }
 __[010 ok / pre-processing special case ]__
-// /* DISCARDED */
 #if X
 /*
 #else
