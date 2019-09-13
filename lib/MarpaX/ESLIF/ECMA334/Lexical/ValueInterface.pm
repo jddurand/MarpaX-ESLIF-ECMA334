@@ -2,6 +2,7 @@ use strict;
 use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334::Lexical::ValueInterface;
+use MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper;
 use Carp qw/croak/;
 use Log::Any qw/$log/;
 
@@ -160,6 +161,18 @@ Computes the value of a C<!> pre-processing expression
 =cut
 
 sub pp_condition_symbol { return $_[0]->{definitions}->{$_[0]->_normalized_condition_symbol($_[1])} //= $MarpaX::ESLIF::false }
+
+=head3 pp_not_expression
+
+Computes the value of a C<!> pre-processing expression
+
+=cut
+
+sub unicode_escape_sequence {
+    my ($self, $utf8bytes) = @_;
+
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($utf8bytes)
+}
 
 =head1 SEE ALSO
 
