@@ -50,15 +50,7 @@ foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAG
 sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
-    my %options =
-        (
-         input => $input,
-         encoding => $encoding,
-         definitions =>
-         {
-             'TRUE' => $MarpaX::ESLIF::true
-         }
-        );
+    my %options = (input => $input, encoding => $encoding);
 
     my $lexicalAst = eval { MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options) };
 
@@ -73,11 +65,7 @@ sub do_test {
 done_testing();
 
 __DATA__
-__[ 001 ok / general ]__
-#if !TRUE // comment
-/* comment */
-  notvalid
-#endif
+__[ 001 ok / unicode characters ]__
 // A Hello World! program in C#.
 using System;
 {
