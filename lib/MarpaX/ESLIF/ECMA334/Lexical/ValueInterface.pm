@@ -45,11 +45,13 @@ sub new {
         croak "$_ definition must be a MarpaX::ESLIF boolean" unless MarpaX::ESLIF::is_bool($definitions->{$_})
     }
 
-    return bless {
-        result => undef,
-        definitions => $definitions,
-        %options
-    }, $pkg
+    return bless
+        (
+         {
+             result => undef,
+             definitions => $definitions,
+             %options
+         }, $pkg)
 }
 
 # ----------------
@@ -179,13 +181,6 @@ sub unicode_escape_sequence {
 L<MarpaX::ESLIF::ECMA334>
 
 =cut
-
-sub my_action {
-    my ($self, @args) = @_;
-
-    return { ruleName => $MarpaX::ESLIF::Context::ruleName,
-             what => [ @args ] };
-}
 
 sub _normalized_condition_symbol {
     #

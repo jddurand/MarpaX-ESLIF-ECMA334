@@ -27,7 +27,7 @@ Log::Any::Adapter->set('Log4perl');
 
 BEGIN { require_ok('MarpaX::ESLIF::ECMA334') };
 
-my $ecma334 = MarpaX::ESLIF::ECMA334->new();
+my $ecma334 = MarpaX::ESLIF::ECMA334->new;
 isa_ok($ecma334, 'MarpaX::ESLIF::ECMA334');
 
 diag("###########################################################");
@@ -50,12 +50,9 @@ foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAG
 sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
-    my @r = eval { $ecma334->parse(input => $input, encoding => $encoding, definitions => { 'TRUE' => $MarpaX::ESLIF::true }) };
-    if ($want_ok && @r) {
-        use Data::Scan::Printer;
-        local %Data::Scan::Printer::Option = (with_deparse => 1, with_ansicolor => 0);
-        dspp($r[0])
-    }
+    my @r = eval { MarpaX::ESLIF::ECMA334->new->parse(input => $input, encoding => $encoding, definitions => { 'TRUE' => $MarpaX::ESLIF::true }) };
+
+    diag($@) if !$want_ok && $@;
 
     ok($want_ok ? scalar(@r) : !scalar(@r), $name);
 }

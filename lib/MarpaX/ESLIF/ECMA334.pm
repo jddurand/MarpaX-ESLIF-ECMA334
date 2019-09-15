@@ -47,7 +47,6 @@ This module parses C# language as per Standard ECMA-334 5th Edition.
 
 use Carp qw/croak/;
 use Data::Section -setup;
-use Devel::Hexdump qw/xd/;
 use Log::Any qw/$log/;
 use MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface;
 use MarpaX::ESLIF::ECMA334::Lexical::ValueInterface;
@@ -61,16 +60,11 @@ my $IDENTIFIER_OR_KEYWORD_BNF = ${__PACKAGE__->section_data('identifier or keywo
 my $KEYWORD_BNF               = ${__PACKAGE__->section_data('keyword grammar')};
 my $PP_EXPRESSION_BNF         = ${__PACKAGE__->section_data('pp expression grammar')};
 
-my $PRE_LEXICAL_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $PRE_LEXICAL_BNF);
-$log->debug('pre lexical grammar compiled');
-my $LEXICAL_GRAMMAR     = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $LEXICAL_BNF);
-$log->debug('lexical grammar compiled');
+my $PRE_LEXICAL_GRAMMAR           = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $PRE_LEXICAL_BNF);
+my $LEXICAL_GRAMMAR               = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $LEXICAL_BNF);
 my $IDENTIFIER_OR_KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $IDENTIFIER_OR_KEYWORD_BNF); # No log
-$log->debug('identifier or keyword grammar compiled');
-my $KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $KEYWORD_BNF); # No log
-$log->debug('keyword grammar compiled');
-my $PP_EXPRESSION_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $PP_EXPRESSION_BNF); # No log
-$log->debug('pp expression grammar compiled');
+my $KEYWORD_GRAMMAR               = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $KEYWORD_BNF); # No log
+my $PP_EXPRESSION_GRAMMAR         = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $PP_EXPRESSION_BNF);
 
 # ============================================================================
 # new
@@ -78,19 +72,15 @@ $log->debug('pp expression grammar compiled');
 sub new {
     my ($pkg) = @_;
 
-    return bless {}, $pkg
-}
-
-# ============================================================================
-# _init
-# ============================================================================
-sub _init {
-    my ($self) = @_;
-
-    $self->{last_pp_expression} = undef;
-    $self->{last_conditional_symbol} = undef;
-    $self->{can_next_conditional_section} = [];
-    $self->{has_token} = 0;
+    return bless
+        (
+         {
+             last_pp_expression => undef,
+             last_conditional_symbol => undef,
+             can_next_conditional_section => [],
+             has_token => 0
+         },
+         $pkg)
 }
 
 # ============================================================================
@@ -100,26 +90,19 @@ sub parse {
     my ($self, %options) = @_;
 
     #
-    # Init
-    #
-    $self->_init();
-    #
-    # Pre-parse
-    #
-    my $preparsedInput = $self->_preparse(%options);    
-
-    #
     # Lexical parse
     #
-    return $self->_parse($LEXICAL_GRAMMAR,
-                         'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
-                         'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
-                         \&_lexicalEventManager,
-                         undef, # sharedEslifRecognizer
-                         %options,
-                         input => $preparsedInput,
-                         encoding => 'UTF-8'
-        );
+    return $self->_parse
+        (
+         $LEXICAL_GRAMMAR,
+         'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
+         'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
+         \&_lexicalEventManager,
+         undef, # sharedEslifRecognizer
+         %options,
+         input => $self->_preparse(%options),
+         encoding => 'UTF-8'
+        )
 }
 
 # ============================================================================
@@ -145,7 +128,7 @@ sub _preparse {
         # - If the last character of the source file is a Control-Z character (U+001A), this character is deleted
         #
         if ($output =~ s/\x{001A}$//) {
-            $log->debugf('Deleted Control-Z character (U+001A) at the end of the source file');
+            $log->debugf('Deleted Control-Z character (U+001A) at the end of the source file')
         }
 
         #
@@ -156,7 +139,7 @@ sub _preparse {
         #
         if (bytes::length($output) > 0 && $output !~ /[\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]$/) {
             $output .= "\x{000D}";
-            $log->debugf('Added carriage-return character (U+000D) at the end of the source file');
+            $log->debugf('Added carriage-return character (U+000D) at the end of the source file')
         }
     }
 
@@ -178,7 +161,10 @@ sub _parse {
     # ------------------------
     # Instanciate a recognizer
     # ------------------------
-    my $eslifRecognizer = defined($sharedEslifRecognizer) ? $sharedEslifRecognizer->newFrom($eslifGrammar) : MarpaX::ESLIF::Recognizer->new($eslifGrammar, $eslifRecognizerInterface);
+    my $eslifRecognizer = defined($sharedEslifRecognizer) ?
+        $sharedEslifRecognizer->newFrom($eslifGrammar)
+        :
+        MarpaX::ESLIF::Recognizer->new($eslifGrammar, $eslifRecognizerInterface);
 
     # --------------------------------------------------------------------
     # Because we may have prediction events even before the first read
@@ -186,7 +172,7 @@ sub _parse {
     # happen only once in the whole life of parsing, including sub parses.
     # --------------------------------------------------------------------
     if (! defined($eslifRecognizer->input)) {
-        $eslifRecognizer->read || croak 'Initial read failed';
+        $eslifRecognizer->read || croak 'Initial read failed'
     }
 
     # -----------------------------------------------------
@@ -207,9 +193,9 @@ sub _parse {
                     # This is a failure unless it is a sub-grammar that has reached completion at least once
                     #
                     if ($eslifRecognizerInterface->hasCompletion && $eslifRecognizerInterface->recurseLevel) {
-                        last;
+                        last
                     } else {
-                        croak 'resume() failed';
+                        croak 'resume() failed'
                     }
                 }
             } while ($eslifRecognizer->isCanContinue)
@@ -225,115 +211,86 @@ sub _parse {
     # -----------------------------------------------------------------------------------------
     # Call for valuation (we configured value interface to not accept ambiguity nor null parse)
     # -----------------------------------------------------------------------------------------
-    my $value = MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface);
-    croak 'Valuation failure' unless $value->value();
+    croak 'Valuation failure' unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
 
     # ------------------------
     # Return the value
     # ------------------------
-    return $eslifValueInterface->getResult;
+    return $eslifValueInterface->getResult
 }
 
+# ============================================================================
+# _identifier_or_keyword
+# ============================================================================
 sub _identifier_or_keyword {
     my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
 
-    $log->noticef('[%2d] Trying grammar %s', $eslifRecognizerInterface->recurseLevel, '<identifier or keyword>');
-
-    my $identifier_or_keyword = eval {
-        $self->_parse($IDENTIFIER_OR_KEYWORD_GRAMMAR,
-                      'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
-                      'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
-                      \&_lexicalEventManager,
-                      undef, # sharedEslifRecognizer
-                      input => $eslifRecognizer->input,
-                      recurseLevel => $eslifRecognizerInterface->recurseLevel + 1,
-                      exhaustion => 1,
-                      encoding => 'UTF-8',
-                      definitions => $eslifRecognizerInterface->definitions);
-    };
-    if ($@) {
-        $log->noticef('[%2d] Failure of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<identifier or keyword>', $@);
-    } else {
-        $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<identifier or keyword>', $identifier_or_keyword);
+    return eval
+    {
+        $self->_parse(
+            $IDENTIFIER_OR_KEYWORD_GRAMMAR,
+            'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
+            'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
+            \&_lexicalEventManager,
+            undef, # sharedEslifRecognizer
+            input => $eslifRecognizer->input,
+            recurseLevel => $eslifRecognizerInterface->recurseLevel + 1,
+            exhaustion => 1,
+            encoding => 'UTF-8',
+            definitions => $eslifRecognizerInterface->definitions
+            )
     }
-
-    return $identifier_or_keyword;
 }
 
+# ============================================================================
+# _pp_expression
+# ============================================================================
 sub _pp_expression {
     my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
 
-    $log->noticef('[%2d] Trying grammar %s', $eslifRecognizerInterface->recurseLevel, '<pp expression>');
-
-    my $pp_expression = eval {
-        $self->_parse($PP_EXPRESSION_GRAMMAR,
-                      'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
-                      'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
-                      \&_lexicalEventManager,
-                      $eslifRecognizer, # sharedEslifRecognizer
-                      input => $eslifRecognizer->input,
-                      recurseLevel => $eslifRecognizerInterface->recurseLevel + 1,
-                      exhaustion => 1,
-                      encoding => 'UTF-8',
-                      definitions => $eslifRecognizerInterface->definitions);
-    };
-
-    if ($@) {
-        $log->noticef('[%2d] Failure of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<pp expression>', $@);
-    } else {
-        $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<pp expression>', $pp_expression);
+    return eval
+    {
+        $self->_parse(
+            $PP_EXPRESSION_GRAMMAR,
+            'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
+            'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
+            \&_lexicalEventManager,
+            $eslifRecognizer, # sharedEslifRecognizer
+            input => $eslifRecognizer->input,
+            recurseLevel => $eslifRecognizerInterface->recurseLevel + 1,
+            exhaustion => 1,
+            encoding => 'UTF-8',
+            definitions => $eslifRecognizerInterface->definitions
+            )
     }
-
-    return $pp_expression;
 }
 
+# ============================================================================
+# _keyword
+# ============================================================================
 sub _keyword {
     my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
 
-    $log->noticef('[%2d] Trying grammar %s', $eslifRecognizerInterface->recurseLevel, '<keyword>');
-    
-    my $keyword = eval {
-        $self->_parse($KEYWORD_GRAMMAR,
-                      'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
-                      'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
-                      \&_lexicalEventManager,
-                      undef, # sharedEslifRecognizer
-                      input => $eslifRecognizer->input,
-                      recurseLevel => $eslifRecognizerInterface->recurseLevel + 1,
-                      exhaustion => 1,
-                      encoding => 'UTF-8',
-                      definitions => $eslifRecognizerInterface->definitions);
-    };
-
-    if ($@) {
-        $log->noticef('[%2d] Failure of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<keyword>', $@);
-    } else {
-        $log->noticef('[%2d] Output of grammar %s: %s', $eslifRecognizerInterface->recurseLevel, '<keyword>', $keyword);
-    }
-
-    return $keyword;
-}
-
-sub _hexdump
-{
-    my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
-
-    my $output = '';
-    my $offset = 0;
-		
-    foreach my $chunk (unpack "(a16)*", $eslifRecognizer->input)
+    return eval
     {
-        use bytes;
-        my $hex = unpack "H*", $chunk; # hexadecimal magic
-        $chunk =~ tr/ -~/./c;          # replace unprintables
-        $hex   =~ s/(.{1,8})/$1 /gs;   # insert spaces
-        $log->noticef('[%2d] 0x%08x (%05u)  %-*s %s', $eslifRecognizerInterface->recurseLevel, $offset, $offset, 36, $hex, $chunk);
-        $offset += 16;
+        $self->_parse(
+            $KEYWORD_GRAMMAR,
+            'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
+            'MarpaX::ESLIF::ECMA334::Lexical::ValueInterface',
+            \&_lexicalEventManager,
+            undef, # sharedEslifRecognizer
+            input => $eslifRecognizer->input,
+            recurseLevel => $eslifRecognizerInterface->recurseLevel + 1,
+            exhaustion => 1,
+            encoding => 'UTF-8',
+            definitions => $eslifRecognizerInterface->definitions
+            )
     }
-
-    return $output
 }
 
+# ============================================================================
+# _error
+# ============================================================================
 sub _error {
     my ($self, $fmt, @args) = @_;
 
@@ -341,8 +298,11 @@ sub _error {
     croak sprintf($fmt, @args);
 }
 
+# ============================================================================
+# _error
+# ============================================================================
 #
-# The event manager must always return a true value it it has performed a lexeme complete
+# The event manager must always return a true value if it has performed a lexeme complete
 #
 sub _lexicalEventManager {
     my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
@@ -350,10 +310,6 @@ sub _lexicalEventManager {
     my $rc = 0;
 
     my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
-    $log->noticef('[%2d] Events  : %s', $eslifRecognizerInterface->recurseLevel, \@events);
-    my @expected = @{$eslifRecognizer->lexemeExpected};
-    $log->noticef('[%2d] Expected: %s', $eslifRecognizerInterface->recurseLevel, \@expected);
-    # $self->_hexdump($eslifRecognizer, $eslifRecognizerInterface);
 
     #
     # At any predicted event, we have two possible sub-grammars
@@ -361,55 +317,40 @@ sub _lexicalEventManager {
     my @alternatives;
     my $latm = -1;
 
-    {
-        my $input = (split(/\R/, $eslifRecognizer->input // ''))[0];
-        $log->noticef('[%2d] Input: %s', $eslifRecognizerInterface->recurseLevel, $input);
-    }
-
     foreach my $event (@events) {
         my ($identifier_or_keyword, $keyword, $match, $name, $value, $pp_expression) = (undef, undef, undef, undef, undef, undef);
 
         if ($event eq "'exhausted'") {
-	    $log->noticef('[%2d] Exhaustion event', $eslifRecognizerInterface->recurseLevel);
-            $eslifRecognizerInterface->hasCompletion(1);
+            $eslifRecognizerInterface->hasCompletion(1)
         }
         elsif ($event eq 'pp_expression$') {
-	    $log->noticef('[%2d] <pp expression> completion event', $eslifRecognizerInterface->recurseLevel);
-            $eslifRecognizerInterface->hasCompletion(1);
+            $eslifRecognizerInterface->hasCompletion(1)
         }
         elsif ($event eq 'identifier_or_keyword$') {
-	    $log->noticef('[%2d] <identifier or keyword> completion event', $eslifRecognizerInterface->recurseLevel);
-            $eslifRecognizerInterface->hasCompletion(1);
+            $eslifRecognizerInterface->hasCompletion(1)
         }
         elsif ($event eq 'token$') {
-            if (! $eslifRecognizerInterface->recurseLevel) {
-                $log->noticef('[%2d] <token> completion event', $eslifRecognizerInterface->recurseLevel);
-                $self->{has_token} = 1
-            }
+            $self->{has_token} = 1 if ! $eslifRecognizerInterface->recurseLevel
         }
         elsif ($event eq 'pp_declaration_define$') {
-            croak 'A #define declaration is not allowed after any token' if $self->{has_token};
-	    $log->noticef('[%2d] #define %s', $eslifRecognizerInterface->recurseLevel, $self->{last_conditional_symbol});
-            $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::true;
+            croak 'A #define declaration must appear before any token' if $self->{has_token};
+            $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::true
         }
         elsif ($event eq 'pp_declaration_undef$') {
-            croak 'An #undef declaration is not allowed after any token' if $self->{has_token};
-	    $log->noticef('[%2d] #undef %s', $eslifRecognizerInterface->recurseLevel, $self->{last_conditional_symbol});
-            $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false;
+            croak 'An #undef declaration must appear before after any token' if $self->{has_token};
+            $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false
         }
         elsif ($event eq "pp_if_context[]") {
             if ($self->{last_pp_expression}) {
-                $log->noticef('[%2d] #if context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
                 $value = undef;
                 $name = 'CONDITIONAL SECTION OK';
-                push(@{$self->{can_next_conditional_section}}, 0);
+                push(@{$self->{can_next_conditional_section}}, 0)
             } else {
-                $log->noticef('[%2d] #if context: CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
                 $value = undef;
                 $name = 'CONDITIONAL SECTION KO';
-                push(@{$self->{can_next_conditional_section}}, 1);
+                push(@{$self->{can_next_conditional_section}}, 1)
             }
         }
         elsif ($event eq "pp_elif_context[]") {
@@ -418,16 +359,14 @@ sub _lexicalEventManager {
             #
             my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // croak 'Unbalanced #if/#elif';
             if ($can_next_conditional_section && $self->{last_pp_expression}) {
-                $log->noticef('[%2d] #elif context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
                 $value = undef;
                 $name = 'CONDITIONAL SECTION OK';
-                $self->{can_next_conditional_section}->[-1] = 0;
+                $self->{can_next_conditional_section}->[-1] = 0
             } else {
-                $log->noticef('[%2d] #elif context: CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
                 $value = undef;
-                $name = 'CONDITIONAL SECTION KO';
+                $name = 'CONDITIONAL SECTION KO'
             }
         }
         elsif ($event eq "pp_else_context[]") {
@@ -436,20 +375,17 @@ sub _lexicalEventManager {
             #
             my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // croak 'Unbalanced #if/#elif';
             if ($can_next_conditional_section && ! $self->{last_pp_expression}) {
-                $log->noticef('[%2d] #else context: CONDITIONAL SECTION OK match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
                 $value = undef;
-                $name = 'CONDITIONAL SECTION OK';
+                $name = 'CONDITIONAL SECTION OK'
             } else {
-                $log->noticef('[%2d] #else context: CONDITIONAL SECTION KO match', $eslifRecognizerInterface->recurseLevel);
                 $match = '';
                 $value = undef;
-                $name = 'CONDITIONAL SECTION KO';
+                $name = 'CONDITIONAL SECTION KO'
             }
         }
         elsif ($event eq "pp_endif_context[]") {
-            $log->noticef('[%2d] #endif context', $eslifRecognizerInterface->recurseLevel);
-            pop(@{$self->{can_next_conditional_section}});
+            pop(@{$self->{can_next_conditional_section}})
         }
         elsif ($event eq '^available_identifier') {
             $identifier_or_keyword //= $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
@@ -458,7 +394,7 @@ sub _lexicalEventManager {
                 if (! defined($keyword)) {
                     $match = $identifier_or_keyword;
                     $value = $identifier_or_keyword;
-                    $name = 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD';
+                    $name = 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD'
                 }
             }
         }
@@ -467,7 +403,7 @@ sub _lexicalEventManager {
             if (defined($keyword)) {
                 $match = $keyword;
                 $value = $keyword;
-                $name = 'KEYWORD';
+                $name = 'KEYWORD'
             }
         }
         elsif ($event eq '^identifier_or_keyword') {
@@ -475,7 +411,7 @@ sub _lexicalEventManager {
             if (defined($identifier_or_keyword)) {
                 $match = $identifier_or_keyword;
                 $value = $identifier_or_keyword;
-                $name = 'IDENTIFIER OR KEYWORD';
+                $name = 'IDENTIFIER OR KEYWORD'
             }
         }
         elsif ($event eq '^conditional_symbol') {
@@ -485,13 +421,12 @@ sub _lexicalEventManager {
                     $match = $identifier_or_keyword;
                     $value = $identifier_or_keyword;
                     $name = 'ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE';
-                    $self->{last_conditional_symbol} = $match;
+                    $self->{last_conditional_symbol} = $match
                 }
             }
         }
         elsif ($event eq '^pp_expression') {
             $pp_expression //= $self->_pp_expression($eslifRecognizer, $eslifRecognizerInterface);
-	    $log->noticef('[%2d] Last <pp expression> is: %s', $eslifRecognizerInterface->recurseLevel, $pp_expression);
             #
             # Remember the last expression, and send a zero-length token into <PP EXPRESSION>
             # because _pp_expression() shared to stream with our recognizer: our position is already
@@ -500,10 +435,10 @@ sub _lexicalEventManager {
             $self->{last_pp_expression} = $pp_expression;
             $match = '';
             $value = $pp_expression;
-            $name = 'PP EXPRESSION';
+            $name = 'PP EXPRESSION'
         }
         else {
-	    $self->_error('[%2d] Unsupported event %s', $eslifRecognizerInterface->recurseLevel, $event);
+	    $self->_error('[%2d] Unsupported event %s', $eslifRecognizerInterface->recurseLevel, $event)
         }
 
 	if (defined($match)) {
@@ -513,26 +448,19 @@ sub _lexicalEventManager {
                     @alternatives = ();
                     $latm = $length;
                 }
-                push(@alternatives, { match => $match, name => $name, value => $value });
+                push(@alternatives, { match => $match, name => $name, value => $value })
             }
-        } else {
-            # $log->noticef('[%2d] Event %s matches no lexeme', $eslifRecognizerInterface->recurseLevel, $event);
         }
     }
 
     if ($latm >= 0) {
-        foreach (@alternatives) {
-	    $log->noticef('[%2d] Lexeme alternative: %s: %s', $eslifRecognizerInterface->recurseLevel, $_->{name}, $_->{value});
-            $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value});
-        }
-        $log->noticef('[%2d] Lexeme complete on %d bytes', $eslifRecognizerInterface->recurseLevel, $latm);
+        map {
+            $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
+        } @alternatives;
         $self->_error('lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
-        $rc = 1;
-    } else {
-        $log->noticef('[%2d] No lexeme', $eslifRecognizerInterface->recurseLevel, \@events);
+        $rc = 1
     }
 
-    # $log->noticef('[%2d] Events: %d matches', $eslifRecognizerInterface->recurseLevel, \@events, scalar(@alternatives));
     return $rc;
 }
 
