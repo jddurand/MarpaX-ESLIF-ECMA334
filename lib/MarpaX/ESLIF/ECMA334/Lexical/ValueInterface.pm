@@ -24,10 +24,6 @@ MarpaX::ESLIF::ECMA334's Lexical Value Interface
 
 =cut
 
-# -----------
-# Constructor
-# -----------
-
 =head1 SUBROUTINES/METHODS
 
 =head2 new($class)
@@ -35,6 +31,10 @@ MarpaX::ESLIF::ECMA334's Lexical Value Interface
 Instantiate a new value interface object.
 
 =cut
+
+# ============================================================================
+# new
+# ============================================================================
 
 sub new {
     my ($pkg, %options) = @_;
@@ -54,13 +54,15 @@ sub new {
          }, $pkg)
 }
 
-# ----------------
-# Required methods
-# ----------------
-
 =head2 Required methods
 
-=head3 isWithHighRankOnly
+=cut
+
+# ============================================================================
+# isWithHighRankOnly
+# ============================================================================
+
+=head3 isWithHighRankOnly($self)
 
 Returns a true or a false value, indicating if valuation should use highest ranked rules or not, respectively. Default is a true value.
 
@@ -68,7 +70,11 @@ Returns a true or a false value, indicating if valuation should use highest rank
 
 sub isWithHighRankOnly { return 1 }  # When there is the rank adverb: highest ranks only ?
 
-=head3 isWithOrderByRank
+# ============================================================================
+# isWithOrderByRank
+# ============================================================================
+
+=head3 isWithOrderByRank($self)
 
 Returns a true or a false value, indicating if valuation should order by rule rank or not, respectively. Default is a true value.
 
@@ -76,7 +82,11 @@ Returns a true or a false value, indicating if valuation should order by rule ra
 
 sub isWithOrderByRank  { return 1 }  # When there is the rank adverb: order by rank ?
 
-=head3 isWithAmbiguous
+# ============================================================================
+# isWithAmbiguous
+# ============================================================================
+
+=head3 isWithAmbiguous($self)
 
 Returns a true or a false value, indicating if valuation should allow ambiguous parse tree or not, respectively. Default is a false value.
 
@@ -84,7 +94,11 @@ Returns a true or a false value, indicating if valuation should allow ambiguous 
 
 sub isWithAmbiguous    { return 0 }  # Allow ambiguous parse ?
 
-=head3 isWithNull
+# ============================================================================
+# isWithNull
+# ============================================================================
+
+=head3 isWithNull($self)
 
 Returns a true or a false value, indicating if valuation should allow a null parse tree or not, respectively. Default is a false value.
 
@@ -92,7 +106,11 @@ Returns a true or a false value, indicating if valuation should allow a null par
 
 sub isWithNull         { return 0 }  # Allow null parse ?
 
-=head3 maxParses
+# ============================================================================
+# maxParses
+# ============================================================================
+
+=head3 maxParses($self)
 
 Returns the number of maximum parse tree valuations. Default is unlimited (i.e. a false value).
 
@@ -100,7 +118,11 @@ Returns the number of maximum parse tree valuations. Default is unlimited (i.e. 
 
 sub maxParses          { return 0 }  # Maximum number of parse tree values
 
-=head3 getResult
+# ============================================================================
+# getResult
+# ============================================================================
+
+=head3 getResult($self)
 
 Returns the current parse tree value.
 
@@ -108,7 +130,11 @@ Returns the current parse tree value.
 
 sub getResult          { return $_[0]->{result} }
 
-=head3 setResult
+# ============================================================================
+# setResult
+# ============================================================================
+
+=head3 setResult($self, $result)
 
 Sets the current parse tree value.
 
@@ -116,7 +142,15 @@ Sets the current parse tree value.
 
 sub setResult          { return $_[0]->{result} = $_[1] }
 
-=head3 pp_or_expression
+=head2 Additional methods
+
+=cut
+
+# ============================================================================
+# pp_or_expression
+# ============================================================================
+
+=head3 pp_or_expression($self, $leftValue, $rightValue)
 
 Computes the value of a C<||> pre-processing expression
 
@@ -124,7 +158,11 @@ Computes the value of a C<||> pre-processing expression
 
 sub pp_or_expression   { return ($_[1] // 0) || ($_[2] // 0) ? $MarpaX::ESLIF::true : $MarpaX::ESLIF::false }
 
-=head3 pp_and_expression
+# ============================================================================
+# pp_and_expression
+# ============================================================================
+
+=head3 pp_and_expression($self, $leftValue, $rightValue)
 
 Computes the value of a C<&&> pre-processing expression
 
@@ -132,7 +170,11 @@ Computes the value of a C<&&> pre-processing expression
 
 sub pp_and_expression   { return ($_[1] // 0) && ($_[2] // 0) ? $MarpaX::ESLIF::true : $MarpaX::ESLIF::false }
 
-=head3 pp_equal_expression
+# ============================================================================
+# pp_equal_expression
+# ============================================================================
+
+=head3 pp_equal_expression($self, $leftValue, $rightValue)
 
 Computes the value of a C<==> pre-processing expression
 
@@ -140,7 +182,11 @@ Computes the value of a C<==> pre-processing expression
 
 sub pp_equal_expression   { return ($_[1] // 0) == ($_[2] // 0) ? $MarpaX::ESLIF::true : $MarpaX::ESLIF::false }
 
-=head3 pp_not_equal_expression
+# ============================================================================
+# pp_not_equal_expression
+# ============================================================================
+
+=head3 pp_not_equal_expression($self, $leftValue, $rightValue)
 
 Computes the value of a C<!=> pre-processing expression
 
@@ -148,7 +194,11 @@ Computes the value of a C<!=> pre-processing expression
 
 sub pp_not_equal_expression   { return ($_[1] // 0) != ($_[2] // 0) ? $MarpaX::ESLIF::true : $MarpaX::ESLIF::false }
 
-=head3 pp_not_expression
+# ============================================================================
+# pp_not_expression
+# ============================================================================
+
+=head3 pp_not_expression($self, $Value)
 
 Computes the value of a C<!> pre-processing expression
 
@@ -156,17 +206,25 @@ Computes the value of a C<!> pre-processing expression
 
 sub pp_not_expression   { return ($_[1] // 0) ? $MarpaX::ESLIF::false : $MarpaX::ESLIF::true }
 
-=head3 pp_not_expression
+# ============================================================================
+# pp_condition_symbol($self, $symbol)
+# ============================================================================
 
-Computes the value of a C<!> pre-processing expression
+=head3 pp_condition_symbol
+
+Returns the value of a conditional symbol
 
 =cut
 
 sub pp_condition_symbol { return $_[0]->{definitions}->{$_[0]->_normalized_condition_symbol($_[1])} //= $MarpaX::ESLIF::false }
 
-=head3 pp_not_expression
+# ============================================================================
+# unicode_escape_sequence
+# ============================================================================
 
-Computes the value of a C<!> pre-processing expression
+=head3 unicode_escape_sequence($self, $escapedSequence)
+
+Returns the unescaped character corresponding to a unicode escaped sequence
 
 =cut
 

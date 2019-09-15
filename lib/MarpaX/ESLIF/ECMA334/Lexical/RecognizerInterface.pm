@@ -23,12 +23,13 @@ MarpaX::ESLIF::ECMA334's Lexical Recognizer Interface
 
 =cut
 
-
-# -----------
-# Constructor
-# -----------
-
 =head1 SUBROUTINES/METHODS
+
+=cut
+
+# ============================================================================
+# new
+# ============================================================================
 
 =head2 new($class, %options)
 
@@ -58,9 +59,6 @@ A reference to a hash containing known definitions, where values must be a Marpa
 
 =cut
 
-# ============================================================================
-# new
-# ============================================================================
 sub new {
     my ($pkg, %options) = @_;
 
@@ -81,23 +79,23 @@ sub new {
          $pkg)
 }
 
-# ----------------
-# Required methods
-# ----------------
+=head2 Required methods
+
+=cut
 
 # ============================================================================
 # read
 # ============================================================================
 
-=head2 Required methods
-
 =head3 read($self)
 
-Returns a true or a false value, indicating if last read was successful. Default is a true value.
+Returns a true or a false value, indicating if last read was successful.
 
 =cut
 
-sub read                   { return 1 } # First read callback will be ok
+sub read {
+    return 1 # First read callback will be ok
+}
 
 # ============================================================================
 # isEof
@@ -105,11 +103,13 @@ sub read                   { return 1 } # First read callback will be ok
 
 =head3 isEof($self)
 
-Returns a true or a false value, indicating if end-of-data is reached. Default is a true value.
+Returns a true or a false value, indicating if end-of-data is reached.
 
 =cut
 
-sub isEof                  { return 1 } # ../. and we will say this is EOF
+sub isEof {
+    return 1 # ../. and we will say this is EOF
+}
 
 # ============================================================================
 # isCharacterStream
@@ -117,11 +117,13 @@ sub isEof                  { return 1 } # ../. and we will say this is EOF
 
 =head3 isCharacterStream($self)
 
-Returns a true or a false value, indicating if last read is a stream of characters. Default is a true value.
+Returns a true or a false value, indicating if last read is a stream of characters.
 
 =cut
 
-sub isCharacterStream      { return 1 } # MarpaX::ESLIF will validate the input
+sub isCharacterStream {
+    return 1 # MarpaX::ESLIF will validate the input
+}
 
 # ============================================================================
 # encoding
@@ -129,11 +131,13 @@ sub isCharacterStream      { return 1 } # MarpaX::ESLIF will validate the input
 
 =head3 encoding($self)
 
-Returns encoding information. Default is undef.
+Returns encoding information.
 
 =cut
 
-sub encoding               { return $_[0]->{encoding} } # Let MarpaX::ESLIF guess eventually - undef is ok
+sub encoding {
+    return $_[0]->{encoding} # Let MarpaX::ESLIF guess eventually - undef is ok
+}
 
 # ============================================================================
 # data
@@ -145,7 +149,9 @@ Returns last bunch of data. Default is the string passed in the constructor.
 
 =cut
 
-sub data                   { return $_[0]->{input} // croak 'Undefined input' } # Data itself
+sub data {
+    return $_[0]->{input} // croak 'Undefined input' # Data itself
+}
 
 # ============================================================================
 # isWithDisableThreshold
@@ -153,11 +159,13 @@ sub data                   { return $_[0]->{input} // croak 'Undefined input' } 
 
 =head3 isWithDisableThreshold($self)
 
-Returns a true or a false value, indicating if threshold warning is on or off, respectively. Default is a false value.
+Returns a true or a false value, indicating if threshold warning is on or off, respectively.
 
 =cut
 
-sub isWithDisableThreshold { return 0 } # Disable threshold warning ?
+sub isWithDisableThreshold {
+    return 0
+}
 
 # ============================================================================
 # isWithExhaustion
@@ -165,11 +173,13 @@ sub isWithDisableThreshold { return 0 } # Disable threshold warning ?
 
 =head3 isWithExhaustion($self)
 
-Returns a true or a false value, indicating if exhaustion event is on or off, respectively. Default is a false value.
+Returns a true or a false value, indicating if exhaustion event is on or off, respectively.
 
 =cut
 
-sub isWithExhaustion       { return $_[0]->{exhaustion} // 0 } # Exhaustion event ? Default is false.
+sub isWithExhaustion {
+    return $_[0]->{exhaustion} // 0
+}
 
 # ============================================================================
 # isWithNewline
@@ -177,11 +187,13 @@ sub isWithExhaustion       { return $_[0]->{exhaustion} // 0 } # Exhaustion even
 
 =head3 isWithNewline($self)
 
-Returns a true or a false value, indicating if newline count is on or off, respectively. Default is a false value.
+Returns a true or a false value, indicating if newline count is on or off, respectively.
 
 =cut
 
-sub isWithNewline          { return $_[0]->{newline} // 1 } # Newline count ? Default is true.
+sub isWithNewline {
+    return 1
+}
 
 # ============================================================================
 # isWithTrack
@@ -189,13 +201,17 @@ sub isWithNewline          { return $_[0]->{newline} // 1 } # Newline count ? De
 
 =head3 isWithTrack($self)
 
-Returns a true or a false value, indicating if absolute position tracking is on or off, respectively. Default is a true value.
+Returns a true or a false value, indicating if absolute position tracking is on or off, respectively.
 
 =cut
 
-sub isWithTrack            { return $_[0]->{track} // 0 } # Absolute position tracking ? Default is true.
+sub isWithTrack {
+    return 0
+}
 
 =head2 Additional methods
+
+=cut
 
 # ============================================================================
 # recurseLevel
@@ -203,11 +219,13 @@ sub isWithTrack            { return $_[0]->{track} // 0 } # Absolute position tr
 
 =head3 recurseLevel($self)
 
-Returns recurse level.
+Returns current recurse level.
 
 =cut
 
-sub recurseLevel          { return $_[0]->{recurseLevel} // 0 } # Recurse level - defaulting to 0
+sub recurseLevel {
+    return $_[0]->{recurseLevel} // 0 # Recurse level - defaulting to 0
+}
 
 # ============================================================================
 # hasCompletion
@@ -236,9 +254,7 @@ Returns a true or a false value, indicating if C<$lexeme> represents the charact
 =cut
 
 sub A_unicode_escape_sequence_representing_the_character_005f {
-    my ($self, $lexeme) = @_;
-
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($lexeme) eq "\x{005F}"
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($_[1]) eq "\x{005F}"
 }
 
 # ============================================================================
@@ -252,9 +268,7 @@ Returns a true or a false value, indicating if C<$lexeme> represent a character 
 =cut
 
 sub A_unicode_escape_sequence_representing_a_character_of_classes_Lu_Ll_Lt_Lm_Lo_or_Nl {
-    my ($self, $lexeme) = @_;
-
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($lexeme) =~ /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($_[1]) =~ /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/
 }
 
 # ============================================================================
@@ -268,9 +282,7 @@ Returns a true or a false value, indicating if C<$lexeme> represent a character 
 =cut
 
 sub A_unicode_escape_sequence_representing_a_character_of_classes_Mn_or_Mc {
-    my ($self, $lexeme) = @_;
-
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($lexeme) =~ /[\p{Mn}\p{Mc}]/
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($_[1]) =~ /[\p{Mn}\p{Mc}]/
 }
 
 # ============================================================================
@@ -284,9 +296,7 @@ Returns a true or a false value, indicating if C<$lexeme> represent a character 
 =cut
 
 sub A_unicode_escape_sequence_representing_a_character_of_the_class_Nd {
-    my ($self, $lexeme) = @_;
-
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($lexeme) =~ /\p{Nd}/
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($_[1]) =~ /\p{Nd}/
 }
 
 # ============================================================================
@@ -300,9 +310,7 @@ Returns a true or a false value, indicating if C<$lexeme> represent a character 
 =cut
 
 sub A_unicode_escape_sequence_representing_a_character_of_the_class_Pc {
-    my ($self, $lexeme) = @_;
-
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($lexeme) =~ /\p{Pc}/
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($_[1]) =~ /\p{Pc}/
 }
 
 # ============================================================================
@@ -316,9 +324,7 @@ Returns a true or a false value, indicating if C<$lexeme> represent a character 
 =cut
 
 sub A_unicode_escape_sequence_representing_a_character_of_the_class_Cf {
-    my ($self, $lexeme) = @_;
-
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($lexeme) =~ /\p{Cf}/
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($_[1]) =~ /\p{Cf}/
 }
 
 # ============================================================================
@@ -332,9 +338,7 @@ Returns current definitions as a HASH reference, where key is the name and value
 =cut
 
 sub definitions {
-    my ($self) = @_;
-
-    return $self->{definitions}
+    return $_[0]->{definitions}
 }
 
 # ============================================================================

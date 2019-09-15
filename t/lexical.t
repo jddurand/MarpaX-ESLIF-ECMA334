@@ -27,8 +27,8 @@ Log::Any::Adapter->set('Log4perl');
 
 BEGIN { require_ok('MarpaX::ESLIF::ECMA334') };
 
-my $ecma334 = MarpaX::ESLIF::ECMA334->new;
-isa_ok($ecma334, 'MarpaX::ESLIF::ECMA334');
+my $lexicalParser = MarpaX::ESLIF::ECMA334::Lexical->new;
+isa_ok($lexicalParser, 'MarpaX::ESLIF::ECMA334::Lexical');
 
 diag("###########################################################");
 diag("Inline data");
@@ -50,11 +50,21 @@ foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAG
 sub do_test {
     my ($want_ok, $name, $input, $encoding) = @_;
 
-    my @r = eval { MarpaX::ESLIF::ECMA334->new->parse(input => $input, encoding => $encoding, definitions => { 'TRUE' => $MarpaX::ESLIF::true }) };
+    my %options =
+        (
+         input => $input,
+         encoding => $encoding,
+         definitions =>
+         {
+             'TRUE' => $MarpaX::ESLIF::true
+         }
+        );
 
-    diag($@) if !$want_ok && $@;
+    my $lexicalAst = eval { MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options) };
 
-    ok($want_ok ? scalar(@r) : !scalar(@r), $name);
+    diag($@) if !$want_ok && ! defined($lexicalAst);
+
+    ok($want_ok ? defined($lexicalAst) : !defined($lexicalAst), $name);
 }
 
 #

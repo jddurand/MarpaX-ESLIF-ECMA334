@@ -25,6 +25,8 @@ MarpaX::ESLIF::ECMA334's Lexical Unicode Helper
 
 =head1 SUBROUTINES/METHODS
 
+=cut
+
 # ============================================================================
 # unicode_escape_sequence
 # ============================================================================
