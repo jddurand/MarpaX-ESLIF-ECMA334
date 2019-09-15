@@ -4,7 +4,6 @@ use warnings FATAL => 'all';
 package MarpaX::ESLIF::ECMA334::Lexical::ValueInterface;
 use MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper;
 use Carp qw/croak/;
-use Log::Any qw/$log/;
 
 # ABSTRACT: MarpaX::ESLIF::ECMA334 Lexical Value Interface
 
