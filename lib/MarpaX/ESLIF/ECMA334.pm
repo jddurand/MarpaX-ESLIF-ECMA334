@@ -28,7 +28,7 @@ This module parses C# language as per Standard ECMA-334 5th Edition.
     #
     # Lexical parse
     #
-    my $lexicalAst = MarpaX::ESLIF::ECMA334::Lexical->new()->parse
+    my $lexicalAst = MarpaX::ESLIF::ECMA334::Lexical->new->parse
                        (
                          input => $input,                 # The input
                          encoding => 'UTF-8',             # The eventual input encoding - optional though recommended
@@ -36,6 +36,15 @@ This module parses C# language as per Standard ECMA-334 5th Edition.
                            'TRUE' => $MarpaX::ESLIF::true # Definitions must be a MarpaX::ESLIF boolean
                          }
                        );
+
+    #
+    # Syntactic parse
+    #
+    my $syntacticAst = MarpaX::ESLIF::ECMA334::Syntactic->new->parse(lexicalAst);
+
+=head1 SEE ALSO
+
+L<MarpaX::ESLIF::ECMA404::Lexical>, L<MarpaX::ESLIF::ECMA404::Syntactic>
 
 =cut
 
