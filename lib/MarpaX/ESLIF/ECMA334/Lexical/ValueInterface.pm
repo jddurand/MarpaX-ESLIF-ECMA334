@@ -49,6 +49,7 @@ sub new {
          {
              result => undef,
              definitions => $definitions,
+             tokens => [],
              %options
          }, $pkg)
 }
@@ -230,7 +231,83 @@ Returns the unescaped character corresponding to a unicode escaped sequence
 sub unicode_escape_sequence {
     my ($self, $utf8bytes) = @_;
 
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence($utf8bytes)
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_escape_sequence($utf8bytes)
+}
+
+# ============================================================================
+# tokenMarkerAction
+# ============================================================================
+
+=head3 tokenMarkerAction($self, $tokenMarker)
+
+Action associated to a C<TOKEN MARKER>. It pushes a reference to a hash containing:
+
+=over
+
+=item string
+
+Token value as string
+
+=item line_start
+
+Token line start number (with respect to eventual C<#line> directive
+
+=item line_end
+
+Token line end number (with respect to eventual C<#line> directive
+
+=item _line_start
+
+Token line number (w/o respect of eventual C<#line> directive
+
+=item _line_end
+
+Token line number (w/o respect of eventual C<#line> directive
+
+=item column_start
+
+Column start number
+
+=item column_end
+
+Column end number
+
+=item offset
+
+Token offset v.s. input data
+
+=item byte_length
+
+Token byte length
+
+=item length
+
+Token character length
+
+=back
+
+=cut
+
+sub tokenMarkerAction {
+    my ($self, $tokenMarker) = @_;
+
+    push(@{$self->{tokens}}, $tokenMarker)
+}
+
+# ============================================================================
+# inputAction
+# ============================================================================
+
+=head3 inputAction($self)
+
+Action associated to a C<input>. It returns a reference to an array containing all C<TOKEN MARKER> values.
+
+=cut
+
+sub inputAction {
+    my ($self) = @_;
+
+    return $self->{tokens}
 }
 
 =head1 SEE ALSO

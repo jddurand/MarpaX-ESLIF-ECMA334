@@ -67,7 +67,18 @@ sub new {
              last_pp_expression => undef,
              last_conditional_symbol => undef,
              can_next_conditional_section => [],
-             has_token => 0
+             has_token => 0,
+             current_line => 1,                       # Current line with respect of #line directives
+             _current_line => 1,                      # Current line without respect of #line directives
+             token_line_start => 1,                   # Token start line with respect of #line directives
+             token_line_end => 1,                     # Token end line with respect of #line directives
+             _token_line_start => 1,                  # Token start line without respect of #line directives
+             _token_line_end => 1,                    # Token end line without respect of #line directives
+             token_column_start => 1,                 # Token start column
+             token_column_end => 1,                   # Token end column
+             token_offset => undef,                   # Token start offset in bytes v.s. input data
+             token_byte_length => undef,              # Token byte length
+             token_length => undef,                   # Token character length
          },
          $pkg)
 }
@@ -328,7 +339,16 @@ sub _lexicalEventManager {
             $eslifRecognizerInterface->hasCompletion(1)
         }
         elsif ($event eq 'token$') {
-            $self->{has_token} = 1 if ! $eslifRecognizerInterface->recurseLevel
+            $self->{has_token} = 1 if ! $eslifRecognizerInterface->recurseLevel;
+            #
+            # We inject a <TOKEN MARKER> that we will use for the ast
+            #
+            my ($offset, $length) = $eslifRecognizer->lastCompletedLocation('token');
+            my $string = bytes::substr($eslifRecognizerInterface->data, $offset, $length);
+            utf8::decode($string);
+            $match = '';
+            $value = { string => $string, line => $self->{token_line}, _line => $self->{_line}, column => $self->{token_column} };
+            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'pp_declaration_define$') {
             croak 'A #define declaration must appear before any token' if $self->{has_token};
@@ -337,6 +357,10 @@ sub _lexicalEventManager {
         elsif ($event eq 'pp_declaration_undef$') {
             croak 'An #undef declaration must appear before after any token' if $self->{has_token};
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false
+        }
+        elsif ($event eq 'NEW_LINE$') {
+            $self->{line}++
+            $self->{_line}++
         }
         elsif ($event eq "pp_if_context[]") {
             if ($self->{last_pp_expression}) {
@@ -395,6 +419,9 @@ sub _lexicalEventManager {
                     $name = 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD'
                 }
             }
+        }
+        elsif ($event eq '^token') {
+            ($self->{token_line_start}, $self->{token_column_start}) = ($self->{line}, $eslifRecognizer->column)
         }
         elsif ($event eq '^keyword') {
             $keyword //= $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
@@ -478,7 +505,7 @@ __[ pre lexical grammar ]__
 <input> ::= /./su *
 
 __[ lexical grammar ]__
-:default ::= action => ::ast symbol-action => ::convert[UTF-8]
+:default ::= action => ::undef symbol-action => ::convert[UTF-8]
 :desc ::= 'Lexical grammar'
 :discard ::= <comment>
 
@@ -489,7 +516,7 @@ __[ lexical grammar ]__
 :terminal ::= '"'  pause => after event => :discard[switch]           # Disable comment in regular string literal
 :terminal ::= '@"' pause => after event => :discard[switch]           # Disable comment in verbatim string literal (Note that it ends with '"' character)
 
-<input>                ::= <input section opt>
+<input>                ::= <input section opt>          action => inputAction
 <input section opt>    ::=
 <input section opt>    ::= <input section>
 <input section>        ::= <input section part>+
@@ -499,10 +526,13 @@ __[ lexical grammar ]__
 <input elements opt>   ::= <input elements>
 <input elements>       ::= <input element>+
 <input element>        ::= <whitespace>
-                         | <token>
+                         | (- <token> -) <TOKEN MARKER>
+:lexeme ::= <TOKEN MARKER> symbol-action => tokenMarkerAction
+event ^token = predicted <token>
 event token$ = completed <token>
 
-<new line> ::= /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
+:lexeme ::= <NEW LINE> pause => after event => NEW_LINE$           # Increments current line number
+<new line> ::= <NEW LINE>
 
 <whitespace>           ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u
 
@@ -833,6 +863,7 @@ event :discard[off] = predicted <skipped section>
 <pp endregion message> ::= <pp new line>
                          | <whitespace> <input characters opt> <pp new line>
 
+event pp_line$ = completed <pp line>
 <pp line> ::= <PP LINE> <whitespace> <line indicator> <pp new line>
 <line indicator> ::= <decimal digits> <whitespace> <file name>
                    | <decimal digits>
@@ -849,6 +880,8 @@ event :discard[off] = predicted <skipped section>
 #
 # Lexemes
 #
+<TOKEN MARKER>                                   ~ /[^\s\S]/ # Matches nothing
+<NEW LINE>                                       ~ /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
 <SINGLE CHARACTER>                               ~ /[^\x{0027}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0027 005C AND NEW LINE CHARACTER>
 <SINGLE REGULAR STRING LITERAL CHARACTER>        ~ /[^\x{0022}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0022 005C AND NEW LINE CHARACTER>
 <KEYWORD>                                        ~ /[^\s\S]/ # Matches nothing

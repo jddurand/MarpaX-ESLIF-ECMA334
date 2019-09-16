@@ -12,20 +12,22 @@ use Log::Any::Adapter::Log4perl;  # Just to make sure dzil catches it
 
 binmode STDOUT, ":utf8";
 
-#
-# Init log
-#
-our $defaultLog4perlConf = '
+
+BEGIN {
+    #
+    # Init log
+    #
+    our $defaultLog4perlConf = '
 log4perl.rootLogger              = INFO, Screen
 log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
 log4perl.appender.Screen.stderr  = 0
 log4perl.appender.Screen.layout  = PatternLayout
 log4perl.appender.Screen.layout.ConversionPattern = %d %-5p %6P %m{chomp}%n
 ';
-Log::Log4perl::init(\$defaultLog4perlConf);
-Log::Any::Adapter->set('Log4perl');
-
-BEGIN { require_ok('MarpaX::ESLIF::ECMA334') };
+    Log::Log4perl::init(\$defaultLog4perlConf);
+    Log::Any::Adapter->set('Log4perl');
+ require_ok('MarpaX::ESLIF::ECMA334')
+};
 
 my $lexicalParser = MarpaX::ESLIF::ECMA334::Lexical->new;
 isa_ok($lexicalParser, 'MarpaX::ESLIF::ECMA334::Lexical');
@@ -55,6 +57,10 @@ sub do_test {
     my $lexicalAst = eval { MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options) };
 
     diag($@) if !$want_ok && ! defined($lexicalAst);
+    if (defined($lexicalAst)) {
+        use Data::Dumper;
+        diag Dumper($lexicalAst)
+    }
 
     ok($want_ok ? defined($lexicalAst) : !defined($lexicalAst), $name);
 }

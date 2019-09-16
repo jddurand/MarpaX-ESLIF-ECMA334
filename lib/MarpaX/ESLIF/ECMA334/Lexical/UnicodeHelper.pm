@@ -31,23 +31,23 @@ MarpaX::ESLIF::ECMA334's Lexical Unicode Helper
 # unicode_escape_sequence
 # ============================================================================
 
-=head2 unicode_escape_sequence($class)
+=head2 unicode_escape_sequence($utf8bytes)
 
 Returns unescaped character corresponding to a C<\\uxxxx> or C<\\Uxxxxxxxx> escaped sequence.
 
 =cut
 
 sub unicode_escape_sequence {
-    my ($class, $utf8bytes) = @_;
+    my ($utf8bytes) = @_;
 
-    return substr($utf8bytes, 0, 2, '') eq '\\u' ? $class->_u4(split(//, $utf8bytes)) : $class->_u8(split(//, $utf8bytes))
+    return substr($utf8bytes, 0, 2, '') eq '\\u' ? _u4(split(//, $utf8bytes)) : _u8(split(//, $utf8bytes))
 }
 
 # ============================================================================
 # _u4
 # ============================================================================
 sub _u4 {
-    my ($class, $hexdigit1, $hexdigit2, $hexdigit3, $hexdigit4) = @_;
+    my ($hexdigit1, $hexdigit2, $hexdigit3, $hexdigit4) = @_;
 
     my $codepoint = hex("${hexdigit1}${hexdigit2}${hexdigit3}${hexdigit4}");
 
@@ -58,7 +58,7 @@ sub _u4 {
 # _u8
 # ============================================================================
 sub _u8 {
-    my ($class, $hexdigit1, $hexdigit2, $hexdigit3, $hexdigit4, $hexdigit5, $hexdigit6, $hexdigit7, $hexdigit8) = @_;
+    my ($hexdigit1, $hexdigit2, $hexdigit3, $hexdigit4, $hexdigit5, $hexdigit6, $hexdigit7, $hexdigit8) = @_;
 
     my @hex = (hex("${hexdigit1}${hexdigit2}${hexdigit3}${hexdigit4}"), hex("${hexdigit5}${hexdigit6}${hexdigit7}${hexdigit8}"));
 
