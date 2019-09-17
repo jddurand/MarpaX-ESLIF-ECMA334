@@ -68,17 +68,20 @@ sub new {
              last_conditional_symbol => undef,
              can_next_conditional_section => [],
              has_token => 0,
-             current_line => 1,                       # Current line with respect of #line directives
-             _current_line => 1,                      # Current line without respect of #line directives
-             token_line_start => 1,                   # Token start line with respect of #line directives
-             token_line_end => 1,                     # Token end line with respect of #line directives
-             _token_line_start => 1,                  # Token start line without respect of #line directives
-             _token_line_end => 1,                    # Token end line without respect of #line directives
-             token_column_start => 1,                 # Token start column
-             token_column_end => 1,                   # Token end column
-             token_offset => undef,                   # Token start offset in bytes v.s. input data
-             token_byte_length => undef,              # Token byte length
-             token_length => undef,                   # Token character length
+             line => 1,                               # Current line with respect of #line directives
+             _line => 1,                              # Current line without respect of #line directives
+             token_value => {
+                 line_start => undef,                 # Token start line with respect of #line directives
+                 _line_start => undef,                # Token start line without respect of #line directives
+                 line_end => undef,                   # Token end line with respect of #line directives
+                 _line_end => undef,                  # Token end line without respect of #line directives
+                 column_start => undef,               # Token start column
+                 column_end => undef,                 # Token end column
+                 offset => undef,                     # Token start offset in bytes v.s. input data
+                 bytes_length => undef,               # Token byte length
+                 length => undef,                     # Token character length
+                 string => undef                      # Token content
+             }
          },
          $pkg)
 }
@@ -343,11 +346,15 @@ sub _lexicalEventManager {
             #
             # We inject a <TOKEN MARKER> that we will use for the ast
             #
-            my ($offset, $length) = $eslifRecognizer->lastCompletedLocation('token');
-            my $string = bytes::substr($eslifRecognizerInterface->data, $offset, $length);
-            utf8::decode($string);
+            $self->{token_value}->{line_end} = $self->{line};
+            $self->{token_value}->{_line_end} = $self->{_line};
+            $self->{token_value}->{column_end} = $eslifRecognizer->column - 1;
+            ($self->{token_value}->{offset}, $self->{token_value}->{bytes_length}) = $eslifRecognizer->lastCompletedLocation('token');
+            $self->{token_value}->{string} = bytes::substr($eslifRecognizerInterface->data, $self->{token_value}->{offset}, $self->{token_value}->{bytes_length});
+            utf8::decode($self->{token_value}->{string});
+            $self->{token_value}->{length} = length($self->{token_value}->{string});
             $match = '';
-            $value = { string => $string, line => $self->{token_line}, _line => $self->{_line}, column => $self->{token_column} };
+            $value = $self->{token_value};
             $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'pp_declaration_define$') {
@@ -359,7 +366,7 @@ sub _lexicalEventManager {
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false
         }
         elsif ($event eq 'NEW_LINE$') {
-            $self->{line}++
+            $self->{line}++;
             $self->{_line}++
         }
         elsif ($event eq "pp_if_context[]") {
@@ -421,7 +428,9 @@ sub _lexicalEventManager {
             }
         }
         elsif ($event eq '^token') {
-            ($self->{token_line_start}, $self->{token_column_start}) = ($self->{line}, $eslifRecognizer->column)
+            $self->{token_value}->{line_start} = $self->{line};
+            $self->{token_value}->{_line_start} = $self->{_line};
+            $self->{token_value}->{column_start} = $eslifRecognizer->column;
         }
         elsif ($event eq '^keyword') {
             $keyword //= $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
