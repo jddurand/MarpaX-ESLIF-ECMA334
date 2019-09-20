@@ -19,9 +19,9 @@ This module parses lexically the C# language as per Standard ECMA-334 5th Editio
 
     use MarpaX::ESLIF::ECMA334::Lexical;
 
-    my $lexical = MarpaX::ESLIF::ECMA334::Lexical->new();
-    my $input   = "public interface Test { bool MyTest(); }"
-    my $ast     = $lexical->parse(input => input, encoding => 'UTF-16', definitions => { 'TRUE' => $MarpaX::ESLIF::true });
+    my $lexical      = MarpaX::ESLIF::ECMA334::Lexical->new();
+    my $input        = "public interface Test { bool MyTest(); }"
+    my $lexicalValue = $lexical->parse(input => input, encoding => 'UTF-16', definitions => { 'TRUE' => $MarpaX::ESLIF::true });
 
 =cut
 
@@ -569,15 +569,21 @@ This module is a L<Log::Any> consumer.
 
 __DATA__
 __[ pre lexical grammar ]__
-:default ::= action => ::convert[UTF-8]
-:desc ::= 'Pre lexical grammar'
+# ############################################################################################################
+# Pre Lexical Grammar
+# ############################################################################################################
+:default                                         ::= action => ::convert[UTF-8]
+:desc                                            ::= 'Pre lexical grammar'
 
-<input> ::= /./su *
+<input>                                          ::= /./su *
 
 __[ lexical grammar ]__
-:default ::= action => ::convert[UTF-8] symbol-action => ::convert[UTF-8]
-:desc ::= 'Lexical grammar'
-:discard ::= <comment>
+# ############################################################################################################
+# Lexical Grammar
+# ############################################################################################################
+:default                                         ::= action => ::convert[UTF-8] symbol-action => ::convert[UTF-8]
+:desc                                            ::= 'Lexical grammar'
+:discard                                         ::= <comment>
 
 #
 # Note that the spec does NOT say if file-name characters disable comments. We assume they do so.
@@ -586,230 +592,230 @@ __[ lexical grammar ]__
 :terminal ::= '"'  pause => after event => :discard[switch]           # Disable comment in regular string literal
 :terminal ::= '@"' pause => after event => :discard[switch]           # Disable comment in verbatim string literal (Note that it ends with '"' character)
 
-<input>                ::= <input section opt>          action => inputAction
-<input section opt>    ::=
-<input section opt>    ::= <input section>
-<input section>        ::= <input section part>+
-<input section part>   ::= <input elements opt> <new line>
-                          | <pp directive>
-<input elements opt>   ::=
-<input elements opt>   ::= <input elements>
-<input elements>       ::= <input element>+
-<input element>        ::= <whitespace>
-                         | (- <token> -) <TOKEN MARKER>
+<input>                                          ::= <input section opt>          action => inputAction
+<input section opt>                              ::=
+<input section opt>                              ::= <input section>
+<input section>                                  ::= <input section part>+
+<input section part>                             ::= <input elements opt> <new line>
+                                                    | <pp directive>
+<input elements opt>                             ::=
+<input elements opt>                             ::= <input elements>
+<input elements>                                 ::= <input element>+
+<input element>                                  ::= <whitespace>
+                                                   | (- <token> -) <TOKEN MARKER>
 :lexeme ::= <TOKEN MARKER> symbol-action => tokenMarkerAction
 event ^token = predicted <token>
 event token$ = completed <token>
 
 :lexeme ::= <NEW LINE> pause => after event => NEW_LINE$           # Increments current line number
-<new line> ::= <NEW LINE>
+<new line>                                       ::= <NEW LINE>
 
-<whitespace>           ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u
+<whitespace>                                     ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u
 
-<comment>                    ::= <single line comment>
-                               | <delimited comment>
-<single line comment>        ::= '//' <input characters opt>
-<input characters opt>       ::=
-<input characters opt>       ::= <input characters>
-<input characters>           ::= <input character>+
-<input character>            ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY UNICODE CHARACTER EXCEPT A NEW LINE CHARACTER>
-<new line character>         ::= /[\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u
+<comment>                                        ::= <single line comment>
+                                                   | <delimited comment>
+<single line comment>                            ::= '//' <input characters opt>
+<input characters opt>                           ::=
+<input characters opt>                           ::= <input characters>
+<input characters>                               ::= <input character>+
+<input character>                                ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY UNICODE CHARACTER EXCEPT A NEW LINE CHARACTER>
+<new line character>                             ::= /[\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u
 
-<delimited comment>          ::= '/*' <delimited comment text opt> <asterisks> '/'
-<delimited comment text opt> ::=
-<delimited comment text opt> ::= <delimited comment text>
-<delimited comment text>     ::= <delimited comment section>+
-<delimited comment section>  ::= '/'
-                               | <asterisks opt> <not slash or asterisk>
-<asterisks opt>              ::=
-<asterisks opt>              ::= <asterisks>
-<asterisks>                  ::= '*'+
-<not slash or asterisk>      ::= /[^\/*]/u # Any Unicode character except / or *
+<delimited comment>                              ::= '/*' <delimited comment text opt> <asterisks> '/'
+<delimited comment text opt>                     ::=
+<delimited comment text opt>                     ::= <delimited comment text>
+<delimited comment text>                         ::= <delimited comment section>+
+<delimited comment section>                      ::= '/'
+                                                   | <asterisks opt> <not slash or asterisk>
+<asterisks opt>                                  ::=
+<asterisks opt>                                  ::= <asterisks>
+<asterisks>                                      ::= '*'+
+<not slash or asterisk>                          ::= /[^\/*]/u # Any Unicode character except / or *
 
-<token> ::= <identifier>
-          | <keyword>
-          | <integer literal>
-          | <real literal>
-          | <character literal>
-          | <string literal>
-          | <operator or punctuator>
+<token>                                          ::= <identifier>
+                                                   | <keyword>
+                                                   | <integer literal>
+                                                   | <real literal>
+                                                   | <character literal>
+                                                   | <string literal>
+                                                   | <operator or punctuator>
 
-<unicode escape sequence> ::= '\\u' <hex digit> <hex digit> <hex digit> <hex digit>
-                            | '\\U' <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit>
-<identifier> ::= <available identifier>
-               | '@' <identifier or keyword>
+<unicode escape sequence>                        ::= '\\u' <hex digit> <hex digit> <hex digit> <hex digit>
+                                                   | '\\U' <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit>
+<identifier>                                     ::= <available identifier>
+                                                   | '@' <identifier or keyword>
 
 event ^identifier_or_keyword = predicted <identifier or keyword>
-<identifier or keyword> ::= <IDENTIFIER OR KEYWORD>
+<identifier or keyword>                          ::= <IDENTIFIER OR KEYWORD>
 
 event ^available_identifier = predicted <available identifier>
-<available identifier> ::= /\w+/
-<available identifier>  ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
+<available identifier>                           ::= /\w+/
+<available identifier>                           ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
 
 event ^keyword = predicted <keyword>
-<keyword> ::= <KEYWORD>
+<keyword>                                        ::= <KEYWORD>
 
-<contextual keyword> ::= 'add'
-                       | 'by'
-                       | 'get'
-                       | 'let'
-                       | 'set'
-                       | 'alias'
-                       | 'descending'
-                       | 'global'
-                       | 'orderby'
-                       | 'value'
-                       | 'ascending'
-                       | 'dynamic'
-                       | 'group'
-                       | 'partial'
-                       | 'var'
-                       | 'async'
-                       | 'equals'
-                       | 'into'
-                       | 'remove'
-                       | 'where'
-                       | 'await'
-                       | 'from'
-                       | 'join'
-                       | 'select'
-                       | 'yield'
+<contextual keyword>                             ::= 'add'
+                                                   | 'by'
+                                                   | 'get'
+                                                   | 'let'
+                                                   | 'set'
+                                                   | 'alias'
+                                                   | 'descending'
+                                                   | 'global'
+                                                   | 'orderby'
+                                                   | 'value'
+                                                   | 'ascending'
+                                                   | 'dynamic'
+                                                   | 'group'
+                                                   | 'partial'
+                                                   | 'var'
+                                                   | 'async'
+                                                   | 'equals'
+                                                   | 'into'
+                                                   | 'remove'
+                                                   | 'where'
+                                                   | 'await'
+                                                   | 'from'
+                                                   | 'join'
+                                                   | 'select'
+                                                   | 'yield'
 
-<literal> ::= <boolean literal>
-            | <integer literal>
-            | <real literal>
-            | <character literal>
-            | <string literal>
-            | <null literal>
+<literal>                                        ::= <boolean literal>
+                                                   | <integer literal>
+                                                   | <real literal>
+                                                   | <character literal>
+                                                   | <string literal>
+                                                   | <null literal>
 
-<boolean literal> ::= 'true'
-                    | 'false'
+<boolean literal>                                ::= 'true'
+                                                   | 'false'
 
-<integer literal> ::= <decimal integer literal>
-                    | <hexadecimal integer literal>
+<integer literal>                                ::= <decimal integer literal>
+                                                   | <hexadecimal integer literal>
 
-<decimal integer literal> ::= <decimal digits> <integer type suffix opt>
-<integer type suffix opt> ::=
-<integer type suffix opt> ::= <integer type suffix>
-<decimal digits> ::= /[0-9]+/
-<integer type suffix> ::= /U|L|UL/i
-<hexadecimal integer literal> ::= '0x':i <hex digits> <integer type suffix opt>
-<hex digits> ::= <hex digit>+
-<hex digit> ::= /[0-9A-Fa-f]/
+<decimal integer literal>                        ::= <decimal digits> <integer type suffix opt>
+<integer type suffix opt>                        ::=
+<integer type suffix opt>                        ::= <integer type suffix>
+<decimal digits>                                 ::= /[0-9]+/
+<integer type suffix>                            ::= /U|L|UL/i
+<hexadecimal integer literal>                    ::= '0x':i <hex digits> <integer type suffix opt>
+<hex digits>                                     ::= <hex digit>+
+<hex digit>                                      ::= /[0-9A-Fa-f]/
 
-<real literal> ::= <decimal digits> '.' <decimal digits> <exponent part opt> <real type suffix opt>
-                 |                  '.' <decimal digits> <exponent part opt> <real type suffix opt>
-                 |                      <decimal digits> <exponent part>     <real type suffix opt>
-                 |                      <decimal digits>                     <real type suffix>
-<exponent part> ::= 'E':i <sign opt> <decimal digits>
-<sign opt> ::=
-<sign opt> ::= <sign>
-<sign> ::= /[+-]/
+<real literal>                                   ::= <decimal digits> '.' <decimal digits> <exponent part opt> <real type suffix opt>
+                                                   |                  '.' <decimal digits> <exponent part opt> <real type suffix opt>
+                                                   |                      <decimal digits> <exponent part>     <real type suffix opt>
+                                                   |                      <decimal digits>                     <real type suffix>
+<exponent part>                                  ::= 'E':i <sign opt> <decimal digits>
+<sign opt>                                       ::=
+<sign opt>                                       ::= <sign>
+<sign>                                           ::= /[+-]/
 
-<exponent part opt> ::=
-<exponent part opt> ::= <exponent part>
-<real type suffix opt> ::=
-<real type suffix opt> ::= <real type suffix>
+<exponent part opt>                              ::=
+<exponent part opt>                              ::= <exponent part>
+<real type suffix opt>                           ::=
+<real type suffix opt>                           ::= <real type suffix>
 
-<real type suffix> ::= /[FDM]/i
+<real type suffix>                               ::= /[FDM]/i
 
-<character literal> ::= "'" <character> "'"
-<character> ::= <single character>
-              | <simple escape sequence>
-              | <hexadecimal escape sequence>
-              | <unicode escape sequence>
+<character literal>                              ::= "'" <character> "'"
+<character>                                      ::= <single character>
+                                                   | <simple escape sequence>
+                                                   | <hexadecimal escape sequence>
+                                                   | <unicode escape sequence>
 #
 # If the value represented by a character literal is greater than U+FFFF , a compile-time error occurs.
 #
 :lexeme ::= <SINGLE CHARACTER> if-action => single_character_is_below_0xFFFF
-<single character> ::= <SINGLE CHARACTER>
+<single character>                               ::= <SINGLE CHARACTER>
 
-<simple escape sequence> ::= "\\'"
-                           | '\\"'
-                           | '\\\\'
-                           | '\\0'
-                           | '\\a'
-                           | '\\b'
-                           | '\\f'
-                           | '\\n'
-                           | '\\r'
-                           | '\\t'
-                           | '\\v'
-<hexadecimal escape sequence> ::= '\\x' <hex digit> <hex digit opt> <hex digit opt> <hex digit opt>
-<hex digit opt> ::=
-<hex digit opt> ::= <hex digit>
+<simple escape sequence>                         ::= "\\'"
+                                                   | '\\"'
+                                                   | '\\\\'
+                                                   | '\\0'
+                                                   | '\\a'
+                                                   | '\\b'
+                                                   | '\\f'
+                                                   | '\\n'
+                                                   | '\\r'
+                                                   | '\\t'
+                                                   | '\\v'
+<hexadecimal escape sequence>                    ::= '\\x' <hex digit> <hex digit opt> <hex digit opt> <hex digit opt>
+<hex digit opt>                                  ::=
+<hex digit opt>                                  ::= <hex digit>
 
-<string literal> ::= <regular string literal>
-                   | <verbatim string literal>
-<regular string literal> ::= '"' <regular string literal characters opt> '"'
-<regular string literal characters opt> ::=
-<regular string literal characters opt> ::= <regular string literal characters>
-<regular string literal characters> ::= <regular string literal character>+
-<regular string literal character> ::= <single regular string literal character>
-                                     | <simple escape sequence>
-                                     | <hexadecimal escape sequence>
-                                     | <unicode escape sequence>
+<string literal>                                 ::= <regular string literal>
+                                                   | <verbatim string literal>
+<regular string literal>                         ::= '"' <regular string literal characters opt> '"'
+<regular string literal characters opt>          ::=
+<regular string literal characters opt>          ::= <regular string literal characters>
+<regular string literal characters>              ::= <regular string literal character>+
+<regular string literal character>               ::= <single regular string literal character>
+                                                   | <simple escape sequence>
+                                                   | <hexadecimal escape sequence>
+                                                   | <unicode escape sequence>
 :lexeme ::= <SINGLE REGULAR STRING LITERAL CHARACTER> if-action => single_regular_string_literal_character_is_below_0xFFFF
-<single regular string literal character> ::= <SINGLE REGULAR STRING LITERAL CHARACTER>
+<single regular string literal character>        ::= <SINGLE REGULAR STRING LITERAL CHARACTER>
 
-<verbatim string literal> ::= '@"' <verbatim string literal characters opt> '"'
-<verbatim string literal characters opt> ::=
-<verbatim string literal characters opt> ::= <verbatim string literal characters>
-<verbatim string literal characters> ::= <verbatim string literal character>+
-<verbatim string literal character> ::= <single verbatim string literal character>
-                                      | <quote escape sequence>
-<single verbatim string literal character> ::= /[^"]/u # Any character except "
-<quote escape sequence> ::= '""'
+<verbatim string literal>                        ::= '@"' <verbatim string literal characters opt> '"'
+<verbatim string literal characters opt>         ::=
+<verbatim string literal characters opt>         ::= <verbatim string literal characters>
+<verbatim string literal characters>             ::= <verbatim string literal character>+
+<verbatim string literal character>              ::= <single verbatim string literal character>
+                                                   | <quote escape sequence>
+<single verbatim string literal character>       ::= /[^"]/u # Any character except "
+<quote escape sequence>                          ::= '""'
 
-<null literal> ::= 'null'
+<null literal>                                   ::= 'null'
 
-<operator or punctuator> ::= '{'
-                           | '+'
-                           | '='
-                           | '->'
-                           | '&='
-                           | '}'
-                           | '-'
-                           | '<'
-                           | '=='
-                           | '|='
-                           | '['
-                           | '*'
-                           | '>'
-                           | '!='
-                           | '^='
-                           | ']'
-                           | '/'
-                           | '?'
-                           | '<='
-                           | '<<'
-                           | '('
-                           | '%'
-                           | '??'
-                           | '>='
-                           | '<<='
-                           | ')'
-                           | '&'
-                           | '::'
-                           | '+='
-                           | '.'
-                           | '|'
-                           | '++'
-                           | '-='
-                           | ','
-                           | '^'
-                           | '--'
-                           | '*='
-                           | ':'
-                           | '!'
-                           | '&&'
-                           | '/='
-                           | ';'
-                           | '~'
-                           | '||'
-                           | '%='
-<right shift> ::= '>' '>'
-<right shift assignment> ::= '>' '>='
+<operator or punctuator>                         ::= '{'
+                                                   | '+'
+                                                   | '='
+                                                   | '->'
+                                                   | '&='
+                                                   | '}'
+                                                   | '-'
+                                                   | '<'
+                                                   | '=='
+                                                   | '|='
+                                                   | '['
+                                                   | '*'
+                                                   | '>'
+                                                   | '!='
+                                                   | '^='
+                                                   | ']'
+                                                   | '/'
+                                                   | '?'
+                                                   | '<='
+                                                   | '<<'
+                                                   | '('
+                                                   | '%'
+                                                   | '??'
+                                                   | '>='
+                                                   | '<<='
+                                                   | ')'
+                                                   | '&'
+                                                   | '::'
+                                                   | '+='
+                                                   | '.'
+                                                   | '|'
+                                                   | '++'
+                                                   | '-='
+                                                   | ','
+                                                   | '^'
+                                                   | '--'
+                                                   | '*='
+                                                   | ':'
+                                                   | '!'
+                                                   | '&&'
+                                                   | '/='
+                                                   | ';'
+                                                   | '~'
+                                                   | '||'
+                                                   | '%='
+<right shift>                                    ::= '>' '>'
+<right shift assignment>                         ::= '>' '>='
 
 # A pre-processing directive always occupies a separate line of source code and always begins with a
 # '#' character and a pre-processing directive name. White space may occur before the '#' character and
@@ -850,69 +856,69 @@ event ^keyword = predicted <keyword>
 #
 event :discard[on] = completed <pp new line>
 
-<pp directive> ::= <pp declaration>
-                 | <pp conditional>
-                 | <pp line>
-                 | <pp diagnostic>
-                 | <pp region>
-                 | <pp pragma>
+<pp directive>                                   ::= <pp declaration>
+                                                   | <pp conditional>
+                                                   | <pp line>
+                                                   | <pp diagnostic>
+                                                   | <pp region>
+                                                   | <pp pragma>
 
 event ^conditional_symbol = predicted <conditional symbol>
-<conditional symbol> ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
-<whitespace opt> ::=
-<whitespace opt> ::= <whitespace>
-<pp declaration define> ::= <PP DEFINE> <whitespace> <conditional symbol> <pp new line>
-<pp declaration undef> ::= <PP UNDEF> <whitespace> <conditional symbol> <pp new line>
-<pp declaration> ::= <pp declaration define>
-                   | <pp declaration undef>
+<conditional symbol>                             ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
+<whitespace opt>                                 ::=
+<whitespace opt>                                 ::= <whitespace>
+<pp declaration define>                          ::= <PP DEFINE> <whitespace> <conditional symbol> <pp new line>
+<pp declaration undef>                           ::= <PP UNDEF> <whitespace> <conditional symbol> <pp new line>
+<pp declaration>                                 ::= <pp declaration define>
+                                                   | <pp declaration undef>
 event pp_declaration_define$ = completed <pp declaration define>
 event pp_declaration_undef$ = completed <pp declaration undef>
-<pp new line> ::= <whitespace opt> <single line comment opt> <new line>
-<single line comment opt> ::=
-<single line comment opt> ::= <single line comment>
+<pp new line>                                    ::= <whitespace opt> <single line comment opt> <new line>
+<single line comment opt>                        ::=
+<single line comment opt>                        ::= <single line comment>
 
 event ^pp_expression = predicted <pp expression>
-<pp expression> ::= <PP EXPRESSION>
-<pp conditional> ::= <pp if section> <pp elif sections opt> <pp else section opt> <pp endif>
-<pp elif sections opt> ::=
-<pp elif sections opt> ::= <pp elif sections>
-<pp else section opt> ::=
-<pp else section opt> ::= <pp else section>
-<conditional section opt> ::=
-<conditional section opt> ::= <conditional section>
+<pp expression>                                  ::= <PP EXPRESSION>
+<pp conditional>                                 ::= <pp if section> <pp elif sections opt> <pp else section opt> <pp endif>
+<pp elif sections opt>                           ::=
+<pp elif sections opt>                           ::= <pp elif sections>
+<pp else section opt>                            ::=
+<pp else section opt>                            ::= <pp else section>
+<conditional section opt>                        ::=
+<conditional section opt>                        ::= <conditional section>
 
 event pp_if_context[] = nulled <pp if context>
-<pp if context> ::=
-<pp if section> ::= <PP IF> <whitespace> <pp expression> <pp new line> (- <pp if context> -) <conditional section opt>
+<pp if context>                                  ::=
+<pp if section>                                  ::= <PP IF> <whitespace> <pp expression> <pp new line> (- <pp if context> -) <conditional section opt>
 
-<pp elif sections> ::= <pp elif section>+
+<pp elif sections>                               ::= <pp elif section>+
 event pp_elif_context[] = nulled <pp elif context>
-<pp elif context> ::=
-<pp elif section> ::= <PP ELIF> <whitespace> <pp expression> <pp new line> (- <pp elif context> -) <conditional section opt>
+<pp elif context>                                ::=
+<pp elif section>                                ::= <PP ELIF> <whitespace> <pp expression> <pp new line> (- <pp elif context> -) <conditional section opt>
 
 event pp_else_context[] = nulled <pp else context>
-<pp else context> ::=
-<pp else section> ::= <PP ELSE> <pp new line> (- <pp else context> -) <conditional section opt>
+<pp else context>                                ::=
+<pp else section>                                ::= <PP ELSE> <pp new line> (- <pp else context> -) <conditional section opt>
 
 event pp_endif_context[] = nulled <pp endif context>
-<pp endif context> ::=
-<pp endif> ::= <PP ENDIF> (- <pp endif context> -) <pp new line>
+<pp endif context>                               ::=
+<pp endif>                                       ::= <PP ENDIF> (- <pp endif context> -) <pp new line>
 
-<conditional section> ::= (- <CONDITIONAL SECTION OK> -) <input section>
-                        | (- <CONDITIONAL SECTION KO> -) <skipped section>
+<conditional section>                            ::= (- <CONDITIONAL SECTION OK> -) <input section>
+                                                   | (- <CONDITIONAL SECTION KO> -) <skipped section>
 event :discard[off] = predicted <skipped section>
-<skipped section> ::= <skipped section part>+
-<skipped section part> ::= <skipped characters opt> <new line>
-                         | <pp directive>
-<skipped characters opt> ::=
-<skipped characters opt> ::= <skipped characters>
-<skipped characters> ::= <whitespace opt> <not number sign> <input characters opt>
-<not number sign> ::= /[^#]/u # Any input-character except #
+<skipped section>                                ::= <skipped section part>+
+<skipped section part>                           ::= <skipped characters opt> <new line>
+                                                   | <pp directive>
+<skipped characters opt>                         ::=
+<skipped characters opt>                         ::= <skipped characters>
+<skipped characters>                             ::= <whitespace opt> <not number sign> <input characters opt>
+<not number sign>                                ::= /[^#]/u # Any input-character except #
 
-<pp diagnostic> ::= <PP ERROR> <pp message>
-                  | <PP WARNING> <pp message>
-<pp message> ::= <new line>
-               | <whitespace> <input characters opt> <new line>
+<pp diagnostic>                                  ::= <PP ERROR> <pp message>
+                                                   | <PP WARNING> <pp message>
+<pp message>                                     ::= <new line>
+                                                   | <whitespace> <input characters opt> <new line>
 
 # The lexical processing of a region:
 # #region
@@ -926,19 +932,19 @@ event :discard[off] = predicted <skipped section>
 # ==> This is an <input section opt> instead of <conditional section opt>
 #
 # <pp region> ::= <pp start region> <conditional section opt> <pp end region>
-<pp region> ::= <pp start region> <input section opt> <pp end region>
-<pp start region> ::= <PP REGION> <pp message>
+<pp region>                                      ::= <pp start region> <input section opt> <pp end region>
+<pp start region>                                ::= <PP REGION> <pp message>
 # WAS: <pp end region> ::= <whitespace opt> '#' <whitespace opt> 'endregion' <pp message>
-<pp end region> ::= <PP ENDREGION> <pp endregion message>
-<pp endregion message> ::= <pp new line>
-                         | <whitespace> <input characters opt> <pp new line>
+<pp end region>                                  ::= <PP ENDREGION> <pp endregion message>
+<pp endregion message>                           ::= <pp new line>
+                                                   | <whitespace> <input characters opt> <pp new line>
 #
 # line and filename indicators are commited after the <pp line> directive, so we need
 # to catch it. We use pp_line$ completion but take care, this will happen at the same
 # time as ^token. This is why it is a separate thingy in lexemeEventManager.
 #
 event pp_line$ = completed <pp line>
-<pp line> ::= <PP LINE> <whitespace> <line indicator> <pp new line>
+<pp line>                                        ::= <PP LINE> <whitespace> <line indicator> <pp new line>
 #
 # We create <line decimal digits> to distinguish it from <decimal digits>
 # We use event ^pp_line_indicator to reset line_directive_filename and line_directive_decimal_digits
@@ -949,79 +955,83 @@ event pp_line_file_name$ = completed <file name>
 :lexeme ::= <LINE INDICATOR DEFAULT>  pause => after event => LINE_INDICATOR_DEFAULT$
 :lexeme ::= <LINE INDICATOR HIDDEN>  pause => after event => LINE_INDICATOR_HIDDEN$
 event ^pp_line_indicator = predicted <line indicator>
-<line indicator> ::= <line decimal digits> <whitespace> <file name>
-                   | <line decimal digits>
-                   | <LINE INDICATOR DEFAULT>
-                   | <LINE INDICATOR HIDDEN>
-<file name> ::= '"' <file name characters> '"'
-<file name characters> ::= <file name character>+
-<file name character> ::= /[^\x{0022}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY INPUT CHARACTER EXCEPT 0022 AND NEW LINE CHARACTER>
+<line indicator>                                 ::= <line decimal digits> <whitespace> <file name>
+                                                   | <line decimal digits>
+                                                   | <LINE INDICATOR DEFAULT>
+                                                   | <LINE INDICATOR HIDDEN>
+<file name>                                      ::= '"' <file name characters> '"'
+<file name characters>                           ::= <file name character>+
+<file name character>                            ::= /[^\x{0022}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY INPUT CHARACTER EXCEPT 0022 AND NEW LINE CHARACTER>
 
-<pp pragma> ::= <PP PRAGMA> <pp pragma text>
-<pp pragma text> ::= (- <new line> -)                                           action => ppPragmaTextAction
-                   | (- <whitespace> -) <input characters opt> (- <new line> -) action => ppPragmaTextAction
+<pp pragma>                                      ::= <PP PRAGMA> <pp pragma text>
+<pp pragma text>                                 ::= (- <new line> -)                                           action => ppPragmaTextAction
+                                                   | (- <whitespace> -) <input characters opt> (- <new line> -) action => ppPragmaTextAction
 
 #
 # Lexemes
 #
-<LINE INDICATOR DEFAULT>                         ~ 'default'
-<LINE INDICATOR HIDDEN>                          ~ 'hidden'
-<TOKEN MARKER>                                   ~ /[^\s\S]/ # Matches nothing
-<NEW LINE>                                       ~ /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
-<SINGLE CHARACTER>                               ~ /[^\x{0027}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0027 005C AND NEW LINE CHARACTER>
-<SINGLE REGULAR STRING LITERAL CHARACTER>        ~ /[^\x{0022}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0022 005C AND NEW LINE CHARACTER>
-<KEYWORD>                                        ~ /[^\s\S]/ # Matches nothing
-<IDENTIFIER OR KEYWORD>                          ~ /[^\s\S]/ # Matches nothing
-<ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE> ~ /[^\s\S]/ # Matches nothing
-<AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD> ~ /[^\s\S]/ # Matches nothing
-<PP DEFINE>                                      ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*define/u
-<PP UNDEF>                                       ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*undef/u
-<PP IF>                                          ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*if/u
-<PP ELIF>                                        ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*elif/u
-<PP ELSE>                                        ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*else/u
-<PP ENDIF>                                       ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*endif/u
-<PP LINE>                                        ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*line/u
-<PP ERROR>                                       ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*error/u
-<PP WARNING>                                     ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*warning/u
-<PP REGION>                                      ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*region/u
-<PP ENDREGION>                                   ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*endregion/u
-<PP PRAGMA>                                      ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*pragma/u
-<CONDITIONAL SECTION OK>                         ~ /[^\s\S]/ # Matches nothing
-<CONDITIONAL SECTION KO>                         ~ /[^\s\S]/ # Matches nothing
-<PP EXPRESSION>                                  ~ /[^\s\S]/ # Matches nothing
+<LINE INDICATOR DEFAULT>                           ~ 'default'
+<LINE INDICATOR HIDDEN>                            ~ 'hidden'
+<TOKEN MARKER>                                     ~ /[^\s\S]/ # Matches nothing
+<NEW LINE>                                         ~ /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
+<SINGLE CHARACTER>                                 ~ /[^\x{0027}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0027 005C AND NEW LINE CHARACTER>
+<SINGLE REGULAR STRING LITERAL CHARACTER>          ~ /[^\x{0022}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0022 005C AND NEW LINE CHARACTER>
+<KEYWORD>                                          ~ /[^\s\S]/ # Matches nothing
+<IDENTIFIER OR KEYWORD>                            ~ /[^\s\S]/ # Matches nothing
+<ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>   ~ /[^\s\S]/ # Matches nothing
+<AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>   ~ /[^\s\S]/ # Matches nothing
+<PP DEFINE>                                        ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*define/u
+<PP UNDEF>                                         ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*undef/u
+<PP IF>                                            ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*if/u
+<PP ELIF>                                          ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*elif/u
+<PP ELSE>                                          ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*else/u
+<PP ENDIF>                                         ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*endif/u
+<PP LINE>                                          ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*line/u
+<PP ERROR>                                         ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*error/u
+<PP WARNING>                                       ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*warning/u
+<PP REGION>                                        ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*region/u
+<PP ENDREGION>                                     ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*endregion/u
+<PP PRAGMA>                                        ~ /[\p{Zs}\x{0009}\x{000B}\x{000C}]*#[\p{Zs}\x{0009}\x{000B}\x{000C}]*pragma/u
+<CONDITIONAL SECTION OK>                           ~ /[^\s\S]/ # Matches nothing
+<CONDITIONAL SECTION KO>                           ~ /[^\s\S]/ # Matches nothing
+<PP EXPRESSION>                                    ~ /[^\s\S]/ # Matches nothing
 
 __[ identifier or keyword grammar ]__
-:default ::= action => ::convert[UTF-8]
-:desc ::= 'Identifier or Keyword grammar'
+# ############################################################################################################
+# Identifier Or Keyword Grammar
+# ############################################################################################################
+:default                                         ::= action => ::convert[UTF-8]
+:desc                                            ::= 'Identifier or Keyword grammar'
 
 event identifier_or_keyword$ = completed <identifier or keyword>
 
-<identifier or keyword> ::= <identifier start character> <identifier part characters opt>
-<identifier part characters opt> ::=
-<identifier part characters opt> ::= <identifier part characters>
-<identifier start character> ::= <letter character>
-                               | <underscore character>
-<underscore character>       ::= '_' # The underscore character U+005F
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>
-<identifier part characters> ::= <identifier part character>+
-<identifier part character>  ::= <letter character>
-                               | <decimal digit character>
-                               | <connecting character>
-                               | <combining character>
-                               | <formatting character>
-<letter character>           ::= /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/u
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Lu Ll Lt Lm Lo or Nl>
-<combining character>        ::= /[\p{Mn}\p{Mc}]/u
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Mn or Mc>
-<decimal digit character>    ::= /[\p{Nd}]/u
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Nd>
-<connecting character>       ::= /[\p{Pc}]/u
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Pc>
-<formatting character>       ::= /[\p{Cf}]/u
-                               | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Cf>
+<identifier or keyword>                          ::= <identifier start character> <identifier part characters opt>
+<identifier part characters opt>                 ::=
+<identifier part characters opt>                 ::= <identifier part characters>
+<identifier start character>                     ::= <letter character>
+                                                   | <underscore character>
+<underscore character>                           ::= '_' # The underscore character U+005F
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>
+<identifier part characters>                     ::= <identifier part character>+
+<identifier part character>                      ::= <letter character>
+                                                   | <decimal digit character>
+                                                   | <connecting character>
+                                                   | <combining character>
+                                                   | <formatting character>
+<letter character>                               ::= /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/u
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Lu Ll Lt Lm Lo or Nl>
+<combining character>                            ::= /[\p{Mn}\p{Mc}]/u
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Mn or Mc>
+<decimal digit character>                        ::= /[\p{Nd}]/u
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Nd>
+<connecting character>                           ::= /[\p{Pc}]/u
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Pc>
+<formatting character>                           ::= /[\p{Cf}]/u
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Cf>
 
-<UNICODE ESCAPE SEQUENCE> :[2]:= /\\u[0-9A-Fa-f]{4}/
-                               | /\\U[0-9A-Fa-f]{8}/
+<UNICODE ESCAPE SEQUENCE>                     :[2]:= /\\u[0-9A-Fa-f]{4}/
+                                                   | /\\U[0-9A-Fa-f]{8}/
+
 <A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>                          ~ <UNICODE ESCAPE SEQUENCE>
 <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Lu Ll Lt Lm Lo or Nl> ~ <UNICODE ESCAPE SEQUENCE>
 <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Mn or Mc>             ~ <UNICODE ESCAPE SEQUENCE>
@@ -1037,8 +1047,11 @@ event identifier_or_keyword$ = completed <identifier or keyword>
 :lexeme ::= <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Cf>                   if-action => A_unicode_escape_sequence_representing_a_character_of_the_class_Cf
 
 __[ keyword grammar ]__
-:default ::= action => ::convert[UTF-8]
-:desc ::= 'Keyword grammar'
+# ############################################################################################################
+# Keyword Grammar
+# ############################################################################################################
+:default  ::= action => ::convert[UTF-8]
+:desc     ::= 'Keyword grammar'
 
 <keyword> ::= 'abstract'
             | 'byte'
@@ -1119,9 +1132,12 @@ __[ keyword grammar ]__
             | 'void'
 
 __[ pp expression grammar ]__
-:desc    ::= 'Pre-processing expression'
-:default ::= action => ::shift
-:start ::= <pp expression>
+# ############################################################################################################
+# Pp Expression Grammar
+# ############################################################################################################
+:desc                                            ::= 'Pre-processing expression'
+:default                                         ::= action => ::shift
+:start                                           ::= <pp expression>
 
 event pp_expression$ = completed <pp expression>
 <pp expression>                                  ::= (- <whitespace opt> -) <pp or expression> (- <whitespace opt> -)
@@ -1145,4 +1161,3 @@ event ^conditional_symbol = predicted <conditional symbol>
 <conditional symbol>                             ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
 
 <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>   ~ /[^\s\S]/ # Matches nothing
-__[ syntactic grammar ]__
