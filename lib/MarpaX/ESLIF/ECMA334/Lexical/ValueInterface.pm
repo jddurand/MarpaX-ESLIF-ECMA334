@@ -49,7 +49,7 @@ sub new {
          {
              result => undef,
              definitions => $definitions,
-             tokens => [],
+             tokens_and_pragmas => [],
              %options
          }, $pkg)
 }
@@ -291,7 +291,29 @@ Token character length
 sub tokenMarkerAction {
     my ($self, $tokenMarker) = @_;
 
-    push(@{$self->{tokens}}, $tokenMarker)
+    push(@{$self->{tokens_and_pragmas}}, {token => $tokenMarker })
+}
+
+# ============================================================================
+# ppPragmaTextAction
+# ============================================================================
+
+=head3 ppPragmaTextAction($self, $text)
+
+Action associated to a C<pp pragma text>. It pushes a hash with keys:
+
+=over pragma
+
+UTF-8 string or undef.
+
+=back
+
+=cut
+
+sub ppPragmaTextAction {
+    my ($self, $text) = @_;
+
+    push(@{$self->{tokens_and_pragmas}}, {pragma => $text })
 }
 
 # ============================================================================
@@ -300,14 +322,74 @@ sub tokenMarkerAction {
 
 =head3 inputAction($self)
 
-Action associated to a C<input>. It returns a reference to an array containing all C<TOKEN MARKER> values.
+Action associated to a C<input>. It returns a reference to an array containing hashes, where keys can be:
+
+=over
+
+=item token
+
+This is a C<TOKEN MARKER> value, a hash containing:
+
+=over
+
+=item filename
+
+Current file name. Can be undef.
+
+=item line_hidden
+
+For debugger, say if current line number is hidden.
+
+=item line_start
+
+Line start with respect of #line directives.
+
+=item _line_start
+
+Line start without respect of #line directives.
+
+=item line_end
+
+Line end with respect of #line directives.
+
+=item _line_end
+
+Line end without respect of #line directives.
+
+=item column_start
+
+Column start.
+
+=item column_end
+
+Column end.
+
+=item offset
+
+Offset in the source.
+
+=item bytes_length
+
+Bytes length in the source.
+
+=item string
+
+UTF-8 string.
+
+=back
+
+=item pragma
+
+This is a C<pp pragma text> value. Can be undef.
+
+=back
 
 =cut
 
 sub inputAction {
     my ($self) = @_;
 
-    return $self->{tokens}
+    return $self->{tokens_and_pragmas}
 }
 
 =head1 SEE ALSO

@@ -56,7 +56,7 @@ sub do_test {
 
     my $lexicalAst = eval { MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options) };
 
-    diag($@) if !$want_ok && ! defined($lexicalAst);
+    diag($@) if $want_ok && !defined($lexicalAst);
     if (defined($lexicalAst)) {
         use Data::Dumper;
         diag Dumper($lexicalAst)
@@ -253,3 +253,13 @@ string i = "one\r\ntwo\r\nthree";
 string j = @"one
 two
 three";
+__[015 ok / pp line and pragma mixed with tokens ]__
+#line 999
+#line 1 "text.cs"
+"String at line 1 in text.cs";
+#pragma
+"String at line 3 in text.cs";
+#pragma Pragma Text
+"String at line 5 in text.cs after #pragma";
+#line 1 "textagain.cs"
+"String again at line 1 in textagain.cs";

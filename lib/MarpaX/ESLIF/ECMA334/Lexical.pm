@@ -68,9 +68,15 @@ sub new {
              last_conditional_symbol => undef,
              can_next_conditional_section => [],
              has_token => 0,
+             line_hidden => 0,                        # Current line information is hidden or not (for debuggers)
              line => 1,                               # Current line with respect of #line directives
              _line => 1,                              # Current line without respect of #line directives
+             line_directive_filename => undef,        # file name in #line directive, but before the end of #line directive
+             line_directive_line => undef,            # line number in #line directive, but before the end of #line directive
+             filename => undef,                       # Current file name with respect of #line directives            
              token_value => {
+                 filename => undef,                   # filename as per #line directive
+                 line_hidden => undef,                # Token line information is hidden (for debuggers)
                  line_start => undef,                 # Token start line with respect of #line directives
                  _line_start => undef,                # Token start line without respect of #line directives
                  line_end => undef,                   # Token end line with respect of #line directives
@@ -329,6 +335,28 @@ sub _lexicalEventManager {
     my @alternatives;
     my $latm = -1;
 
+    #
+    # Always process pp_line$ and NEW_LINE$ before any event
+    #
+    my $have_pp_line_completion = grep {$_ eq 'pp_line$'} @events;
+    my $have_NEW_LINE_completion = grep {$_ eq 'NEW_LINE$'} @events;
+    if ($have_pp_line_completion) {
+        #
+        # Commit <pp line> indicator
+        #
+        $self->{filename} = $self->{line_directive_filename};
+        if ($self->{line_directive_line} eq 'default') {
+            $self->{line_hidden} = 0;
+        } elsif ($self->{line_directive_line} eq 'hidden') {
+            $self->{line_hidden} = 1;
+        } else {
+            $self->{line} = $self->{line_directive_line};
+        }
+    } elsif ($have_NEW_LINE_completion) {
+        $self->{line}++;
+        $self->{_line}++;
+    }
+
     foreach my $event (@events) {
         my ($identifier_or_keyword, $keyword, $match, $name, $value, $pp_expression) = (undef, undef, undef, undef, undef, undef);
 
@@ -346,6 +374,8 @@ sub _lexicalEventManager {
             #
             # We inject a <TOKEN MARKER> that we will use for the ast
             #
+            $self->{token_value}->{filename} = $self->{filename};
+            $self->{token_value}->{line_hidden} = $self->{line_hidden};
             $self->{token_value}->{line_end} = $self->{line};
             $self->{token_value}->{_line_end} = $self->{_line};
             $self->{token_value}->{column_end} = $eslifRecognizer->column - 1;
@@ -366,8 +396,35 @@ sub _lexicalEventManager {
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false
         }
         elsif ($event eq 'NEW_LINE$') {
-            $self->{line}++;
-            $self->{_line}++
+            #
+            # No-op, processed before any other event
+            #
+        }
+        elsif ($event eq 'pp_line_decimal_digits$') {
+            my ($offset, $bytes_length) = $eslifRecognizer->lastCompletedLocation('line decimal digits');
+            $self->{line_directive_line} = int(bytes::substr($eslifRecognizerInterface->data, $offset, $bytes_length));
+        }
+        elsif ($event eq 'pp_line_file_name$') {
+            my ($offset, $bytes_length) = $eslifRecognizer->lastCompletedLocation('file name');
+            my $line_directive_filename = bytes::substr($eslifRecognizerInterface->data, $offset, $bytes_length);
+            utf8::decode($line_directive_filename);
+            #
+            # It contains the double quotes
+            #
+            substr($line_directive_filename,  0, 1, '');
+            substr($line_directive_filename, -1, 1, '');
+            $self->{line_directive_filename} = $line_directive_filename;
+        }
+        elsif ($event eq 'LINE_INDICATOR_DEFAULT$') {
+            $self->{line_directive_line} = 'default';
+        }
+        elsif ($event eq 'LINE_INDICATOR_HIDDEN$') {
+            $self->{line_directive_line} = 'hidden';
+        }
+        elsif ($event eq 'pp_line$') {
+            #
+            # No-op - processed before everything in any case
+            #
         }
         elsif ($event eq "pp_if_context[]") {
             if ($self->{last_pp_expression}) {
@@ -471,6 +528,10 @@ sub _lexicalEventManager {
             $value = $pp_expression;
             $name = 'PP EXPRESSION'
         }
+        elsif ($event eq '^pp_line_indicator') {
+            $self->{line_directive_filename} = undef;
+            $self->{line_directive_line} = undef;
+        }
         else {
 	    $self->_error('[%2d] Unsupported event %s', $eslifRecognizerInterface->recurseLevel, $event)
         }
@@ -514,7 +575,7 @@ __[ pre lexical grammar ]__
 <input> ::= /./su *
 
 __[ lexical grammar ]__
-:default ::= action => ::undef symbol-action => ::convert[UTF-8]
+:default ::= action => ::convert[UTF-8] symbol-action => ::convert[UTF-8]
 :desc ::= 'Lexical grammar'
 :discard ::= <comment>
 
@@ -871,24 +932,40 @@ event :discard[off] = predicted <skipped section>
 <pp end region> ::= <PP ENDREGION> <pp endregion message>
 <pp endregion message> ::= <pp new line>
                          | <whitespace> <input characters opt> <pp new line>
-
+#
+# line and filename indicators are commited after the <pp line> directive, so we need
+# to catch it. We use pp_line$ completion but take care, this will happen at the same
+# time as ^token. This is why it is a separate thingy in lexemeEventManager.
+#
 event pp_line$ = completed <pp line>
 <pp line> ::= <PP LINE> <whitespace> <line indicator> <pp new line>
-<line indicator> ::= <decimal digits> <whitespace> <file name>
-                   | <decimal digits>
-                   | 'default'
-                   | 'hidden'
+#
+# We create <line decimal digits> to distinguish it from <decimal digits>
+# We use event ^pp_line_indicator to reset line_directive_filename and line_directive_decimal_digits
+#
+<line decimal digits> ::= <decimal digits>
+event pp_line_decimal_digits$ = completed <line decimal digits>
+event pp_line_file_name$ = completed <file name>
+:lexeme ::= <LINE INDICATOR DEFAULT>  pause => after event => LINE_INDICATOR_DEFAULT$
+:lexeme ::= <LINE INDICATOR HIDDEN>  pause => after event => LINE_INDICATOR_HIDDEN$
+event ^pp_line_indicator = predicted <line indicator>
+<line indicator> ::= <line decimal digits> <whitespace> <file name>
+                   | <line decimal digits>
+                   | <LINE INDICATOR DEFAULT>
+                   | <LINE INDICATOR HIDDEN>
 <file name> ::= '"' <file name characters> '"'
 <file name characters> ::= <file name character>+
 <file name character> ::= /[^\x{0022}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY INPUT CHARACTER EXCEPT 0022 AND NEW LINE CHARACTER>
 
 <pp pragma> ::= <PP PRAGMA> <pp pragma text>
-<pp pragma text> ::= <new line>
-                   | <whitespace> <input characters opt> <new line>
+<pp pragma text> ::= (- <new line> -)                                           action => ppPragmaTextAction
+                   | (- <whitespace> -) <input characters opt> (- <new line> -) action => ppPragmaTextAction
 
 #
 # Lexemes
 #
+<LINE INDICATOR DEFAULT>                         ~ 'default'
+<LINE INDICATOR HIDDEN>                          ~ 'hidden'
 <TOKEN MARKER>                                   ~ /[^\s\S]/ # Matches nothing
 <NEW LINE>                                       ~ /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
 <SINGLE CHARACTER>                               ~ /[^\x{0027}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0027 005C AND NEW LINE CHARACTER>
