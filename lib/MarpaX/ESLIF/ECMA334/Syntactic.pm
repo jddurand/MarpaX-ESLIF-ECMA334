@@ -100,11 +100,46 @@ __[ syntactic grammar ]__
 :default ::= action => ::ast symbol-action => ::shift # And not ::convert[UTF-8] because we will always inject values from lexical parse, that we know are UTF-8 strings
 :desc ::= 'Syntactic grammar'
 
-#
+#  --------------
 ## Basic concepts
-#
-<namespace name> ::= <namespace or type name>
-<type name>      ::= <namespace or type name>
-<namespace or type name> ::= <identifier> <type argument list opt>
-                           | <namespace or type name> '.' <identifier> <type argument list opt>
-                           | <qualified alias member>
+#  --------------
+<namespace name>          ::= <namespace or type name>
+<type name>               ::= <namespace or type name>
+<namespace or type name>  ::= <identifier> <type argument list opt>
+                            | <namespace or type name> '.' <identifier> <type argument list opt>
+                            | <qualified alias member>
+
+# -----
+# Types
+# -----
+type                      ::= <reference type>
+                            | <value type>
+                            | <type parameter>
+<value type>              ::= <struct type>
+                            | <enum type>
+<struct type>             ::= <type name>
+                              <simple type>
+                              <nullable value type>
+<simple type>             ::= <numeric type>
+                            | 'bool'
+<numeric type>            ::= <integral type>
+                              <floating point type>
+                              'decimal'
+<integral type>           ::= 'sbyte'
+                            | 'byte'
+                            | 'short'
+                            | 'ushort'
+                            | 'int'
+                            | 'uint'
+                            | 'long'
+                            | 'ulong'
+                            | 'char
+<nullable type>  ::= <non nullable value type> '?'
+<non nullable value type> ::= 'type'
+<floating point type>     ::= 'float'
+                            | 'double'
+<enum type>               ::= <type name>
+<type argument list>      ::= '<' <type arguments> '>'
+<type arguments>          ::= <type argument>+ separator => ','
+<type argument>           ::= <type>
+<type parameter>          ::= <identifier>
