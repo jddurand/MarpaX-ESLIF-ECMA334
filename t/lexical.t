@@ -52,7 +52,13 @@ sub do_test {
                                                                      $_->_line // 'undef',
                                                                      $_->column // 'undef',
                                                                      $_->expected // 'undef');
-            diag "$error at file \"$file\", line $line, column $column, expected: " . Dumper($expected)
+            diag ref($_) . " exception:";
+            diag "  Error: " . $_->error if defined($_->error);
+            diag "  File: " . $_->file if defined($_->file);
+            diag "  Line: " . $_->line . " (pp compliant)" if defined($_->line);
+            diag "  Column: " . $_->column if defined($_->column);
+            diag "  Line: " . $_->_line . " (raw)" if defined($_->_line);
+            diag "  Expected: " . Dumper($_->expected) if defined($_->expected);
         } else {
             diag $_
         }

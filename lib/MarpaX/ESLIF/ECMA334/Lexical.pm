@@ -555,11 +555,11 @@ sub _lexicalEventManager {
             $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'pp_declaration_define$') {
-            $self->_exception($eslifRecognizer, 'A #define declaration must appear before any token') if $self->{has_token};
+            $self->_exception(undef, 'A #define declaration must appear before any token') if $self->{has_token};
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::true
         }
         elsif ($event eq 'pp_declaration_undef$') {
-            $self->_exception($eslifRecognizer, 'An #undef declaration must appear before after any token') if $self->{has_token};
+            $self->_exception(undef, 'An #undef declaration must appear before after any token') if $self->{has_token};
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false
         }
         elsif ($event eq 'NEW_LINE$') {
