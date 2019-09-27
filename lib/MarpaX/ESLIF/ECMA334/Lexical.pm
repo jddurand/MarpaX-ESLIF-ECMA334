@@ -3,8 +3,6 @@ use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334::Lexical;
 
-use Log::Any qw/$log/;
-
 # ABSTRACT: C# lexical parse as per Standard ECMA-334 5th Edition
 
 # VERSION
@@ -25,9 +23,7 @@ This module parses lexically the C# language as per Standard ECMA-334 5th Editio
 
 =cut
 
-use Carp qw/croak/;
 use Data::Section -setup;
-use Log::Any qw/$log/;
 use MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface;
 use MarpaX::ESLIF::ECMA334::Lexical::ValueInterface;
 use MarpaX::ESLIF 3.0.15; # if-action
@@ -38,11 +34,136 @@ my $IDENTIFIER_OR_KEYWORD_BNF = ${__PACKAGE__->section_data('identifier or keywo
 my $KEYWORD_BNF               = ${__PACKAGE__->section_data('keyword grammar')};
 my $PP_EXPRESSION_BNF         = ${__PACKAGE__->section_data('pp expression grammar')};
 
-my $PRE_LEXICAL_GRAMMAR           = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $PRE_LEXICAL_BNF);
-my $LEXICAL_GRAMMAR               = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $LEXICAL_BNF);
+my $PRE_LEXICAL_GRAMMAR           = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $PRE_LEXICAL_BNF);
+my $LEXICAL_GRAMMAR               = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $LEXICAL_BNF);
 my $IDENTIFIER_OR_KEYWORD_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $IDENTIFIER_OR_KEYWORD_BNF); # No log
 my $KEYWORD_GRAMMAR               = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $KEYWORD_BNF); # No log
 my $PP_EXPRESSION_GRAMMAR         = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new(), $PP_EXPRESSION_BNF);
+
+my %USERFRIENDLYLEXEMES = (
+    'LINE INDICATOR DEFAULT'                           => 'default',
+    'LINE INDICATOR HIDDEN'                            => 'hidden',
+    # 'TOKEN MARKER'                                     => /[^\s\S]/ # Matches nothing
+    # <NEW LINE>                                         => /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
+    # <SINGLE CHARACTER>                                 => /[^\x{0027}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0027 005C AND NEW LINE CHARACTER>
+    # <SINGLE REGULAR STRING LITERAL CHARACTER>          => /[^\x{0022}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0022 005C AND NEW LINE CHARACTER>
+    'KEYWORD'                                          =>
+    [
+     'abstract'
+     , 'byte'
+     , 'class'
+     , 'delegate'
+     , 'event'
+     , 'fixed'
+     , 'if'
+     , 'internal'
+     , 'new'
+     , 'override'
+     , 'readonly'
+     , 'short'
+     , 'struct'
+     , 'try'
+     , 'unsafe'
+     , 'volatile'
+     , 'as'
+     , 'case'
+     , 'const'
+     , 'do'
+     , 'explicit'
+     , 'float'
+     , 'implicit'
+     , 'is'
+     , 'null'
+     , 'params'
+     , 'ref'
+     , 'sizeof'
+     , 'switch'
+     , 'typeof'
+     , 'ushort'
+     , 'while'
+     , 'base'
+     , 'catch'
+     , 'continue'
+     , 'double'
+     , 'extern'
+     , 'for'
+     , 'in'
+     , 'lock'
+     , 'object'
+     , 'private'
+     , 'return'
+     , 'stackalloc'
+     , 'this'
+     , 'uint'
+     , 'using'
+     , 'bool'
+     , 'char'
+     , 'decimal'
+     , 'else'
+     , 'false'
+     , 'foreach'
+     , 'int'
+     , 'long'
+     , 'operator'
+     , 'protected'
+     , 'sbyte'
+     , 'static'
+     , 'throw'
+     , 'ulong'
+     , 'virtual'
+     , 'break'
+     , 'checked'
+     , 'default'
+     , 'enum'
+     , 'finally'
+     , 'goto'
+     , 'interface'
+     , 'namespace'
+     , 'out'
+     , 'public'
+     , 'sealed'
+     , 'string'
+     , 'true'
+     , 'unchecked'
+     , 'void'
+    ],
+    # <IDENTIFIER OR KEYWORD>                            => /[^\s\S]/ # Matches nothing
+    # <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>   => /[^\s\S]/ # Matches nothing
+    # <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>   => /[^\s\S]/ # Matches nothing
+    'PP DEFINE'                                        => '#define',
+    'PP UNDEF'                                         => '#undef',
+    'PP IF'                                            => '#if',
+    'PP ELIF'                                          => '#elif',
+    'PP ELSE'                                          => '#else',
+    'PP ENDIF'                                         => '#endif',
+    'PP LINE'                                          => '#line',
+    'PP ERROR'                                         => '#error',
+    'PP WARNING'                                       => '#warning',
+    'PP REGION'                                        => '#region',
+    'PP ENDREGION'                                     => '#endregion',
+    'PP PRAGMA'                                        => '#pragma',
+    # <CONDITIONAL SECTION OK>                           ~ /[^\s\S]/ # Matches nothing
+    # <CONDITIONAL SECTION KO>                           ~ /[^\s\S]/ # Matches nothing
+    # <PP EXPRESSION>                                    ~ /[^\s\S]/ # Matches nothing
+    );
+
+#
+# Exceptions definitions
+#
+use Exception::Class (
+    'MarpaX::ESLIF::ECMA334::Lexical::Exception' =>
+    {
+        description => 'Lexical exception',
+        fields      => [ 'file', 'line', '_line', 'column', 'expected' ],
+        alias       => 'throw_exception'
+    },
+
+    'MarpaX::ESLIF::ECMA334::Lexical::Exception::Internal' => {
+        isa         => 'MarpaX::ESLIF::ECMA334::Lexical::Exception',
+        description => 'Internal error',
+        alias       => 'throw_internal_exception'
+    }
+);
 
 =head1 SUBROUTINES/METHODS
 
@@ -139,15 +260,13 @@ sub _preparse {
         #
         my $eslifRecognizerInterface = MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface->new(input => $input, encoding => $encoding);
         my $eslifValueInterface = MarpaX::ESLIF::ECMA334::Lexical::ValueInterface->new();
-        $PRE_LEXICAL_GRAMMAR->parse($eslifRecognizerInterface, $eslifValueInterface) || croak 'Pre-parse phase failure';
+        $PRE_LEXICAL_GRAMMAR->parse($eslifRecognizerInterface, $eslifValueInterface) || $self->_exception(undef, 'Pre-parse phase failure');
         $output = $eslifValueInterface->getResult();
 
         #
         # - If the last character of the source file is a Control-Z character (U+001A), this character is deleted
         #
-        if ($output =~ s/\x{001A}$//) {
-            $log->debugf('Deleted Control-Z character (U+001A) at the end of the source file')
-        }
+        $output =~ s/\x{001A}$//;
 
         #
         # - A carriage-return character (U+000D) is added to the end of the source file if that source file is non-
@@ -155,10 +274,7 @@ sub _preparse {
         #   (U+000A), a next line character (U+0085), a line separator (U+2028), or a paragraph separator
         #   (U+2029)
         #
-        if (bytes::length($output) > 0 && $output !~ /[\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]$/) {
-            $output .= "\x{000D}";
-            $log->debugf('Added carriage-return character (U+000D) at the end of the source file')
-        }
+        $output .= "\x{000D}" if (bytes::length($output) > 0 && $output !~ /[\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]$/);
     }
 
     return $output # Always UTF-8 if not empty
@@ -190,13 +306,13 @@ sub _parse {
     # happen only once in the whole life of parsing, including sub parses.
     # --------------------------------------------------------------------
     if (! defined($eslifRecognizer->input)) {
-        $eslifRecognizer->read || croak 'Initial read failed'
+        $eslifRecognizer->read || $self->_exception($eslifRecognizer, 'Initial read failed')
     }
 
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
     # -----------------------------------------------------
-    $eslifRecognizer->scan(1) || croak 'Initial scan failed';
+    $eslifRecognizer->scan(1) || $self->_exception($eslifRecognizer, 'Initial scan failed');
 
     if ($eslifRecognizer->isCanContinue) {
         {
@@ -213,7 +329,7 @@ sub _parse {
                     if ($eslifRecognizerInterface->hasCompletion && $eslifRecognizerInterface->recurseLevel) {
                         last
                     } else {
-                        croak 'resume() failed'
+                        $self->_exception($eslifRecognizer, 'resume() failed')
                     }
                 }
             } while ($eslifRecognizer->isCanContinue)
@@ -229,7 +345,7 @@ sub _parse {
     # -----------------------------------------------------------------------------------------
     # Call for valuation (we configured value interface to not accept ambiguity nor null parse)
     # -----------------------------------------------------------------------------------------
-    croak 'Valuation failure' unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
+    $self->_exception(undef, 'Valuation failure') unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
 
     # ------------------------
     # Return the value
@@ -307,17 +423,68 @@ sub _keyword {
 }
 
 # ============================================================================
-# _error
+# _exception
 # ============================================================================
-sub _error {
-    my ($self, $fmt, @args) = @_;
+sub _exception {
+    my $self = shift;
 
-    $log->errorf($fmt, @args);
-    croak sprintf($fmt, @args);
+    $self->_error(0, @_) # Not an internal error
+}
+
+# ============================================================================
+# _internal_exception
+# ============================================================================
+sub _internal_exception {
+    my $self = shift;
+
+    $self->_error(1, @_) # Is an internal error
 }
 
 # ============================================================================
 # _error
+# ============================================================================
+sub _error {
+    my ($self, $isInternal, $eslifRecognizer, $fmt, @args) = @_;
+
+    my ($_line, $column, $expected);
+
+    if (defined($eslifRecognizer)) {
+        ($_line, $column) = $eslifRecognizer->location();
+        #
+        # We know what lexemes are - so we rearrange
+        # the list of expected lexemes to something
+        # more user-friendly. Auto-vivification, if any, is ok.
+        #
+        my @expected = map
+        {
+            defined($USERFRIENDLYLEXEMES{$_})
+                ?
+                (
+                 (ref($USERFRIENDLYLEXEMES{$_}) // '') eq 'ARRAY' ? @{$USERFRIENDLYLEXEMES{$_}} : $USERFRIENDLYLEXEMES{$_}
+                )
+                :
+                $_
+        } @{$eslifRecognizer->lexemeExpected};
+        $expected = \@expected;
+    }
+
+    my @exception_args = (
+        error => sprintf($fmt, @args),
+        file => $self->{filename},
+        line => $self->{line},
+        _line => $_line,
+        column => $column,
+        expected => $expected
+        );
+    if ($isInternal) {
+        throw_internal_exception @exception_args
+    } else {
+        throw_exception @exception_args
+    }
+}
+
+# ============================================================================
+# _lexicalEventManager
 # ============================================================================
 #
 # The event manager must always return a true value if it has performed a lexeme complete
@@ -388,11 +555,11 @@ sub _lexicalEventManager {
             $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'pp_declaration_define$') {
-            croak 'A #define declaration must appear before any token' if $self->{has_token};
+            $self->_exception($eslifRecognizer, 'A #define declaration must appear before any token') if $self->{has_token};
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::true
         }
         elsif ($event eq 'pp_declaration_undef$') {
-            croak 'An #undef declaration must appear before after any token' if $self->{has_token};
+            $self->_exception($eslifRecognizer, 'An #undef declaration must appear before after any token') if $self->{has_token};
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false
         }
         elsif ($event eq 'NEW_LINE$') {
@@ -414,6 +581,7 @@ sub _lexicalEventManager {
             substr($line_directive_filename,  0, 1, '');
             substr($line_directive_filename, -1, 1, '');
             $self->{line_directive_filename} = $line_directive_filename;
+
         }
         elsif ($event eq 'LINE_INDICATOR_DEFAULT$') {
             $self->{line_directive_line} = 'default';
@@ -443,7 +611,7 @@ sub _lexicalEventManager {
             #
             # We depend on the previous 'if' of 'elif' use of conditional section
             #
-            my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // croak 'Unbalanced #if/#elif';
+            my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // $self->_exception($eslifRecognizer, 'Unbalanced #if/#elif');
             if ($can_next_conditional_section && $self->{last_pp_expression}) {
                 $match = '';
                 $value = undef;
@@ -459,7 +627,7 @@ sub _lexicalEventManager {
             #
             # We depend on the previous 'if' of 'elif' use of conditional section
             #
-            my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // croak 'Unbalanced #if/#elif';
+            my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // $self->_exception($eslifRecognizer, 'Unbalanced #if/#elif');
             if ($can_next_conditional_section && ! $self->{last_pp_expression}) {
                 $match = '';
                 $value = undef;
@@ -533,7 +701,7 @@ sub _lexicalEventManager {
             $self->{line_directive_line} = undef;
         }
         else {
-	    $self->_error('[%2d] Unsupported event %s', $eslifRecognizerInterface->recurseLevel, $event)
+	    $self->_internal_exception(undef, '[%2d] Unsupported event %s', $eslifRecognizerInterface->recurseLevel, $event)
         }
 
 	if (defined($match)) {
@@ -550,9 +718,9 @@ sub _lexicalEventManager {
 
     if ($latm >= 0) {
         map {
-            $self->_error('%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
+            $self->_internal_exception($eslifRecognizer, '%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
         } @alternatives;
-        $self->_error('lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
+        $self->_internal_exception($eslifRecognizer, 'lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
         $rc = 1
     }
 

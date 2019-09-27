@@ -1,31 +1,18 @@
 #!env perl
 use strict;
 use warnings FATAL => 'all';
+use Data::Dumper;
 use Data::Section 0.200006 -setup;
+use Safe::Isa;
 use Test::More;
 use Test::More::UTF8;
 use Test::Trap;
-use Log::Any qw/$log/;
-use Log::Log4perl qw/:easy/;
-use Log::Any::Adapter;
-use Log::Any::Adapter::Log4perl;  # Just to make sure dzil catches it
+use Try::Tiny;
 
 binmode STDOUT, ":utf8";
 
 
 BEGIN {
-    #
-    # Init log
-    #
-    our $defaultLog4perlConf = '
-log4perl.rootLogger              = INFO, Screen
-log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
-log4perl.appender.Screen.stderr  = 0
-log4perl.appender.Screen.layout  = PatternLayout
-log4perl.appender.Screen.layout.ConversionPattern = %d %-5p %6P %m{chomp}%n
-';
-    Log::Log4perl::init(\$defaultLog4perlConf);
-    Log::Any::Adapter->set('Log4perl');
  require_ok('MarpaX::ESLIF::ECMA334')
 };
 
@@ -54,13 +41,24 @@ sub do_test {
 
     my %options = (input => $input, encoding => $encoding);
 
-    my $lexicalAst = eval { MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options) };
-
-    diag($@) if $want_ok && !defined($lexicalAst);
-    if (defined($lexicalAst)) {
-        use Data::Dumper;
-        diag Dumper($lexicalAst)
-    }
+    my $lexicalAst;
+    try {
+        $lexicalAst = MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options);
+    } catch {
+        if ($_->$_isa('MarpaX::ESLIF::ECMA334::Lexical::Exception')) {
+            my ($error, $file, $line, $_line, $column, $expected) = ($_->error // 'undef',
+                                                                     $_->file // 'undef',
+                                                                     $_->line // 'undef',
+                                                                     $_->_line // 'undef',
+                                                                     $_->column // 'undef',
+                                                                     $_->expected // 'undef');
+            diag "$error at file \"$file\", line $line, column $column, expected: " . Dumper($expected)
+        } else {
+            diag $_
+        }
+    } finally {
+        # diag Dumper($lexicalAst) if defined($lexicalAst)
+    };
 
     ok($want_ok ? defined($lexicalAst) : !defined($lexicalAst), $name);
 }
@@ -151,6 +149,7 @@ class PivotTable {...}
 #endif
 }
 __[005 ko / pre-processing: #define after any token ]_
+#line 1 "My File"
 #define A
 namespace N
 {
