@@ -387,3 +387,120 @@ type                                   ::= <reference type>
                                          | <query expression>
 <constant expression>                  ::= <expression>
 <boolean expression>                   ::= <expression>
+
+# ----------
+# Statements
+# ----------
+<statement>                            ::= <labeled statement>
+                                         | <declaration statement>
+                                         | <embedded statement>
+<embedded statement>                   ::= <block>
+                                         | <empty statement>
+                                         | <expression statement>
+                                         | <selection statement>
+                                         | <iteration statement>
+                                         | <jump statement>
+                                         | <try statement>
+                                         | <checked statement>
+                                         | <unchecked statement>
+                                         | <lock statement>
+                                         | <using statement>
+                                         | <yield statement>
+<block>                                ::= '{' <statement list opt> '}'
+<statement list opt>                   ::= <statement list>
+<statement list opt>                   ::=
+<statement list>                       ::= <statement>+
+<empty statement>                      ::= ';'
+<labeled statement>                    ::= <identifier> ':' <statement>
+<declaration statement>                ::= <local variable declaration> ';'
+                                         | <local constant declaration> ';'
+<local variable declaration>           ::= <local variable type> <local variable declarators>
+<local variable type>                  ::= <type>
+                                         | 'var'
+<local variable declarators>           ::= <local variable declarator>+ separator => ','  proper => 1 hide-separator => 1
+<local variable declarator>            ::= <identifier>
+                                         | <identifier> '=' <local variable initializer>
+<local variable initializer>           ::= <expression>
+                                         | <array initializer>
+<local constant declaration>           ::= 'const' <type> <constant declarators>
+<constant declarators>                 ::= <constant declarator>+ separator => ','  proper => 1 hide-separator => 1
+<constant declarator>                  ::= <identifier> '=' <constant expression>
+<expression statement>                 ::= <statement expression> ';'
+<statement expression>                 ::= <invocation expression>
+                                         | <object creation expression>
+                                         | <assignment>
+                                         | <post increment expression>
+                                         | <post decrement expression>
+                                         | <pre increment expression>
+                                         | <pre decrement expression>
+                                         | <await expression>
+<selection statement>                  ::= <if statement>
+                                         | <switch statement>
+<if statement>                         ::= 'if' '(' <boolean expression> ')' <embedded statement>
+                                         | 'if' '(' <boolean expression> ')' <embedded statement> 'else' <embedded statement>
+<switch statement>                     ::= 'switch' '(' <expression> ')' <switch block>
+<switch block>                         ::= '{' <switch sections opt> '}'
+<switch sections opt>                  ::= <switch sections>
+<switch sections opt>                  ::=
+<switch sections>                      ::= <switch section>+
+<switch section>                       ::= <switch labels> <statement list>
+<switch labels>                        ::= <switch label>+
+<switch label>                         ::= 'case' <constant expression> ':'
+                                         | 'default' ':'
+<iteration statement>                  ::= <while statement>
+                                         | <do statement>
+                                         | <for statement>
+                                         | <foreach statement>
+<while statement>                      ::= 'while' '(' <boolean expression> )' <embedded statement>
+<do statement>                         ::= 'do' <embedded statement> 'while' '(' <boolean expression> ')' ';'
+<for statement>                        ::= 'for' '(' <for initializer opt> ';' <for condition opt> ';' <for iterator opt> ')' <embedded statement>
+<for initializer opt>                  ::= <for initializer>
+<for initializer opt>                  ::=
+<for condition opt>                    ::= <for condition>
+<for condition opt>                    ::=
+<for iterator opt>                     ::= <for iterator>
+<for iterator opt>                     ::=
+<for initializer>                      ::= <local variable declaration>
+                                         | <statement expression list>
+<for condition>                        ::= <boolean expression>
+<for iterator>                         ::= <statement expression list>
+<statement expression list>            ::= <statement expression>+ separator => ','  proper => 1 hide-separator => 1
+<foreach statement>                    ::= 'foreach' '(' <local variable type> <identifier> 'in' <expression> ')' <embedded statement>
+<jump statement>                       ::= <break statement>
+                                         | <continue statement>
+                                         | <goto statement>
+                                         | <return statement>
+                                         | <throw statement>
+<break statement>                      ::= 'break' ';'
+<continue statement>                   ::= 'continue' ';'
+<goto statement>                       ::= 'goto' <identifier> ';'
+                                         | 'goto' 'case' <constant expression> ';'
+                                         | 'goto' 'default' ';
+<return statement>                     ::= 'return' <expression opt> ';'
+<expression opt>                       ::= <expression>
+<expression opt>                       ::=
+<throw statement>                      ::= 'throw' <expression opt> ';'
+<try statement>                        ::= 'try' <block> <catch clauses>
+                                         | 'try' <block> <catch clauses opt> <finally clause>
+<catch clauses opt>                    ::= <catch clauses>
+<catch clauses opt>                    ::=
+<catch clauses>                        ::= <specific catch clauses>
+                                         | <specific catch clauses opt> <general catch clause>
+<specific catch clauses opt>           ::= <specific catch clauses>
+<specific catch clauses opt>           ::=
+<specific catch clauses>               ::= <specific catch clause>+
+<specific catch clause>                ::= 'catch' '(' <type> <identifier opt> ')' <block>
+<general catch clause>                 ::= 'catch' <block>
+<finally clause>                       ::= 'finally' <block>
+<checked statement>                    ::= 'checked' <block>
+<unchecked statement>                  ::= 'unchecked' <block>
+<lock statement>                       ::= 'lock' '(' <expression> ')' <embedded statement>
+<using statement>                      ::= 'using' '(' <resource acquisition> ')' <embedded statement>
+<resource acquisition>                 ::= <local variable declaration>
+                                         | <expression>
+<yield statement>                      ::= 'yield' 'return' <expression> ';'
+                                         | 'yield' 'break' ';'
+
+# ----------
+# Namespaces
+# ----------
