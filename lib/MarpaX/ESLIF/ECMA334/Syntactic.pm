@@ -244,7 +244,7 @@ type                                   ::= <reference type>
                                          | '{' <member declarator list> ',' '}'
 <member declarator list opt>           ::= <member declarator list>
 <member declarator list opt>           ::=
-<member declarator list>               ::= <member declarator>+   separator => ','  proper => 1 hide-separator => 1
+<member declarator list>               ::= <member declarator>+ separator => ','  proper => 1 hide-separator => 1
 <member declarator>                    ::= <simple name>
                                          | <member access>
                                          | <base access>
@@ -314,3 +314,76 @@ type                                   ::= <reference type>
 <lambda expression>                    ::= <async opt> <anonymous function signature> '=>' <anonymous function body>
 <async opt>                            ::= 'async'
 <async opt>                            ::=
+<anonymous method expression>          ::= <async opt> 'delegate' <explicit anonymous function signature opt> <block>
+<explicit anonymous function signature opt> ::= <explicit anonymous function signature>
+<explicit anonymous function signature opt> ::=
+<anonymous-function-signature>         ::= <explicit anonymous function signature>
+                                         | <implicit anonymous function signature>
+<explicit anonymous function signature>::= '(' <explicit anonymous function parameter list opt> ')'
+<explicit anonymous function parameter list opt> ::= <explicit anonymous function parameter list>
+<explicit anonymous function parameter list opt> ::=
+<explicit anonymous function parameter list> ::= <explicit anonymous function parameter>+ separator => ','  proper => 1 hide-separator => 1
+<explicit anonymous function parameter>::= <anonymous function parameter modifier opt> <type> <identifier>
+<anonymous function parameter modifier opt> ::= <anonymous function parameter modifier>
+<anonymous function parameter modifier opt> ::=
+<anonymous function parameter modifier>::= 'ref'
+                                         | 'out'
+<implicit anonymous function signature>::= '(' <implicit anonymous function parameter list opt> ')'
+                                         | <implicit anonymous function parameter>
+<implicit anonymous function parameter list opt> ::= <implicit anonymous function parameter list opt>
+<implicit anonymous function parameter list opt> ::=
+<implicit anonymous function parameter list> ::= <implicit anonymous function parameter>+ separator => ','  proper => 1 hide-separator => 1
+<implicit anonymous function parameter>::= <identifier>
+<anonymous function body>              ::= <expression>
+                                         | <block>
+<query expression>                     ::= <from clause> <query body>
+<from clause>                          ::= 'from' <type opt> <identifier> 'in' <expression>
+<type opt>                             ::= <type>
+<type opt>                             ::=
+<query body>                           ::= <query body clauses opt> <select or group clause> <query continuation opt>
+<query body clauses opt>               ::= <query body clauses>
+<query body clauses opt>               ::=
+<query continuation opt>               ::= <query continuation>
+<query continuation opt>               ::=
+<query body clauses>                   ::= <query body clause>+
+<query body clause>                    ::= <from clause>
+                                         | <let clause>
+                                         | <where clause>
+                                         | <join clause>
+                                         | <join into clause>
+                                         | <orderby clause>
+<let clause>                           ::= 'let' <identifier> '=' <expression>
+<where clause>                         ::= 'where' <boolean expression>
+<join clause>                          ::= 'join' <type opt> <identifier> 'in' <expression> 'on' <expression> 'equals' <expression>
+<join into clause>                     ::= 'join' <type opt> <identifier> 'in' <expression> 'on' <expression> 'equals' <expression> 'into' <identifier>
+<orderby clause>                       ::= 'orderby' <orderings>
+<orderings>                            ::= <ordering>+ separator => ','  proper => 1 hide-separator => 1
+<ordering>                             ::= <expression> <ordering direction opt>
+<ordering direction opt>               ::= <ordering direction>
+<ordering direction opt>               ::=
+<ordering direction>                   ::= 'ascending'
+                                         | 'descending'
+<select or group clause>               ::= <select clause>
+                                         | <group clause>
+<select clause>                        ::= 'select' <expression>
+<group clause>                         ::= 'group' <expression> 'by' <expression>
+<query continuation>                   ::= 'into' <identifier> <query body>
+<assignment>                           ::= <unary expression> <assignment operator> <expression>
+<assignment operator>                  ::= '='
+                                         | '+='
+                                         | '-='
+                                         | '*='
+                                         | '/='
+                                         | '%='
+                                         | '&='
+                                         | '|='
+                                         | '^='
+                                         | '<<='
+                                         | <right shift assignment>
+<expression>                           ::= <non assignment expression>
+                                         | <assignment>
+<non assignment expression>            ::= <conditional expression>
+                                         | <lambda expression>
+                                         | <query expression>
+<constant expression>                  ::= <expression>
+<boolean expression>                   ::= <expression>
