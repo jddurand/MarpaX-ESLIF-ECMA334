@@ -504,3 +504,32 @@ type                                   ::= <reference type>
 # ----------
 # Namespaces
 # ----------
+<compilation unit>                     ::= <extern alias directives opt> <using directives opt> <global attributes opt> <namespace member declarations opt>
+<namespace declaration>                ::= 'namespace' <qualified identifier> <namespace body> ';'
+                                         | 'namespace' <qualified identifier> <namespace body>
+<qualified identifier>                 ::= <identifier>+  separator => ',' proper => 1 # No hide-separator
+<namespace body>                       ::= '{' <extern alias directives opt> <using directives opt> namespace member declarations opt> '}'
+<extern alias directives opt>          ::= <extern alias directives>
+<extern alias directives opt>          ::=
+<using directives opt>                 ::= <using directives>
+<using directives opt>                 ::=
+<namespace member declarations opt>    ::= <namespace member declarations>
+<namespace member declarations opt>    ::=
+<extern alias directives>              ::= <extern alias directive>+
+<extern alias directive>               ::= 'extern' 'alias' <identifier> ';'
+<using directives>                     ::= <using directive>+
+<using directive>                      ::= <using alias directive>
+                                         | <using namespace directive>
+<using alias directive>                ::= 'using' <identifier> '=' <namespace or type name> ';'
+<using namespace directive>            ::= 'using' <namespace name> ';'
+<namespace member declarations>        ::= <namespace member declaration>+
+<namespace member declaration>         ::= <namespace declaration>
+                                         | <type declaration>
+<type declaration>                     ::= <class declaration>
+                                         | <struct declaration>
+                                         | <interface declaration>
+                                         | <enum declaration>
+                                         | <delegate declaration>
+<qualified alias member>               ::= <identifier> '::' <identifier> <type argument list opt>
+<type argument list opt>               ::= <type argument list>
+<type argument list opt>               ::=
