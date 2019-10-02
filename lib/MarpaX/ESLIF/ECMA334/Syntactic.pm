@@ -691,4 +691,85 @@ type                                   ::= <reference type>
                                          | 'override'
                                          | 'abstract'
                                          | 'extern'
+<event accessor declarations>          ::= <add accessor declaration> <remove accessor declaration>
+                                         | <remove accessor declaration> <add accessor declaration>
+<add accessor declaration>             ::= <attributes opt> 'add' <block>
+<remove accessor declaration>          ::= <attributes opt> 'remove' <block>
+<indexer declaration>                  ::= <attributes opt> <indexer modifiers opt> <indexer declarator> '{' <accessor declarations> '}'
+<indexer modifiers>                    ::= <indexer modifier>+
+<indexer modifier>                     ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'virtual'
+                                         | 'sealed'
+                                         | 'override'
+                                         | 'abstract'
+                                         | 'extern'
+<indexer declarator>                   ::= <type> 'this' '[' <formal parameter list> ']'
+                                         | <type> <interface type> '.' 'this' '[' <formal parameter list> ']'
+<operator declaration>                 ::= <attributes opt> <operator modifiers> <operator declarator> <operator body>
+<operator modifiers>                   ::= <operator modifier>+
+<operator modifier>                    ::= 'public'
+                                         | 'static'
+                                         | 'extern'
+<operator declarator>                  ::= <unary operator declarator>
+                                         | <binary operator declarator>
+                                         | <conversion operator declarator>
+<unary operator declarator>            ::= <type> 'operator' <overloadable unary operator> '(' <fixed parameter> ')'
+<overloadable unary operator>          ::= '+'
+                                         | '-'
+                                         | '!'
+                                         | '~'
+                                         | '++'
+                                         | '--'
+                                         | 'true'
+                                         | 'false'
+<binary operator declarator>           ::= <type> 'operator' <overloadable binary operator> '(' <fixed parameter> ',' <fixed parameter> ')'
+<overloadable binary operator>         ::= '+'
+                                         | '=='
+                                         | '-'
+                                         | '!='
+                                         | '*'
+                                         | '>'
+                                         | '/'
+                                         | '<'
+                                         | '%'
+                                         | '>='
+                                         | '&'
+                                         | '<='
+                                         | '|'
+                                         | '^'
+                                         | '<<'
+                                         | <right shift>
+<conversion operator declarator>       ::= 'implicit' 'operator' <type> '(' <fixed parameter> ')'
+                                         | 'explicit' 'operator' <type> '(' <fixed parameter> ')'
+<operator body>                        ::= <block>
+                                         | ';'
+<constructor declaration>              ::= <attributes opt> <constructor modifiers opt> <constructor declarator> <constructor body>
+<constructor modifiers>                ::= <constructor modifier>+
+<constructor modifier>                 ::= 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'extern'
+<constructor declarator>               ::= <identifier> '(' <formal parameter list opt> ')' <constructor initializer opt>
+<constructor initializer>              ::= ':' 'base' '(' <argument list opt> ')'
+                                         | ':' 'this' '(' <argument list opt> ')'
+<constructor body>                     ::= <block>
+                                         | ';'
+<static constructor declaration>       ::= <attributes opt> <static constructor modifiers> <identifier> '(' ')' <static constructor body>
+<static constructor modifiers>         ::= <extern opt> 'static'
+                                         | 'static' <extern opt>
+<extern opt>                           ::= 'extern'
+<extern opt>                           ::=
+<static constructor body>              ::= <block>
+                                         | ';'
+<finalizer declaration>                ::= <attributes opt> <extern opt> '~' <identifier> '(' ')' <finalizer body>
+<finalizer body>                       ::= <block>
+                                         | ';'
 
+# -------
+# Structs
+# -------
