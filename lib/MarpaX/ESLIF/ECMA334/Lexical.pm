@@ -555,12 +555,16 @@ sub _lexicalEventManager {
             $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'pp_declaration_define$') {
-            $self->_exception(undef, 'A #define declaration must appear before any token') if $self->{has_token};
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::true
         }
         elsif ($event eq 'pp_declaration_undef$') {
-            $self->_exception(undef, 'An #undef declaration must appear before after any token') if $self->{has_token};
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false
+        }
+        elsif ($event eq 'PP_DEFINE$') {
+            $self->_exception($eslifRecognizer, 'A #define declaration must appear before any token') if $self->{has_token};
+        }
+        elsif ($event eq 'PP_UNDEF$') {
+            $self->_exception($eslifRecognizer, 'A #define declaration must appear before any token') if $self->{has_token};
         }
         elsif ($event eq 'NEW_LINE$') {
             #
@@ -1039,6 +1043,9 @@ event ^conditional_symbol = predicted <conditional symbol>
 <pp declaration undef>                           ::= <PP UNDEF> <whitespace> <conditional symbol> <pp new line>
 <pp declaration>                                 ::= <pp declaration define>
                                                    | <pp declaration undef>
+:lexeme ::= <PP DEFINE> pause => after event => PP_DEFINE$
+:lexeme ::= <PP UNDEF> pause => after event => PP_UNDEF$
+
 event pp_declaration_define$ = completed <pp declaration define>
 event pp_declaration_undef$ = completed <pp declaration undef>
 <pp new line>                                    ::= <whitespace opt> <single line comment opt> <new line>
