@@ -35,6 +35,23 @@ use Data::Section -setup;
 use Log::Any qw/$log/;
 use MarpaX::ESLIF 3.0.15; # if-action
 
+    use Log::Log4perl qw/:easy/;
+    use Log::Any::Adapter;
+    use Log::Any qw/$log/;
+    use Data::Dumper;
+    #
+    # Init log
+    #
+    our $defaultLog4perlConf = '
+    log4perl.rootLogger              = WARN, Screen
+    log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
+    log4perl.appender.Screen.stderr  = 0
+    log4perl.appender.Screen.layout  = PatternLayout
+    log4perl.appender.Screen.layout.ConversionPattern = %d %-5p %6P %m{chomp}%n
+    ';
+    Log::Log4perl::init(\$defaultLog4perlConf);
+    Log::Any::Adapter->set('Log4perl');
+
 my $SYNTACTIC_BNF             = ${__PACKAGE__->section_data('syntactic grammar')};
 my $SYNTACTIC_GRAMMAR         = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $SYNTACTIC_BNF);
 
@@ -97,7 +114,7 @@ This module is a L<Log::Any> consumer.
 
 __DATA__
 __[ syntactic grammar ]__
-:default ::= action => ::ast symbol-action => ::shift # And not ::convert[UTF-8] because we will always inject values from lexical parse, that we know are UTF-8 strings
+:default ::= action => ::ast
 :desc ::= 'Syntactic grammar'
 
 #  --------------
@@ -156,7 +173,7 @@ __[ syntactic grammar ]__
                                          | 'uint'
                                          | 'long'
                                          | 'ulong'
-                                         | 'char
+                                         | 'char'
 <nullable type>                        ::= <non nullable value type> '?'
 <non nullable value type>              ::= 'type'
 <floating point type>                  ::= 'float'
@@ -320,12 +337,12 @@ __[ syntactic grammar ]__
                                          | <shift expression> '<<' <additive expression>
                                          | <shift expression> <right shift> <additive expression>
 <relational expression>                ::= <shift expression>
-                                         | <relational-expression> '<' <shift expression>
-                                         | <relational-expression> '>' <shift expression>
-                                         | <relational-expression> '<=' <shift expression>
-                                         | <relational-expression> '>=' <shift expression>
-                                         | <relational-expression> 'is' <type>
-                                         | <relational-expression> 'as' <type>
+                                         | <relational expression> '<' <shift expression>
+                                         | <relational expression> '>' <shift expression>
+                                         | <relational expression> '<=' <shift expression>
+                                         | <relational expression> '>=' <shift expression>
+                                         | <relational expression> 'is' <type>
+                                         | <relational expression> 'as' <type>
 <equality expression>                  ::= <relational expression>
                                          | <equality expression> '==' <relational expression>
                                          | <equality expression> '!=' <relational expression>
@@ -349,7 +366,7 @@ __[ syntactic grammar ]__
 <anonymous method expression>          ::= <async opt> 'delegate' <explicit anonymous function signature opt> <block>
 <explicit anonymous function signature opt> ::= <explicit anonymous function signature>
 <explicit anonymous function signature opt> ::=
-<anonymous-function-signature>         ::= <explicit anonymous function signature>
+<anonymous function signature>         ::= <explicit anonymous function signature>
                                          | <implicit anonymous function signature>
 <explicit anonymous function signature>::= '(' <explicit anonymous function parameter list opt> ')'
 <explicit anonymous function parameter list opt> ::= <explicit anonymous function parameter list>
@@ -490,7 +507,7 @@ __[ syntactic grammar ]__
                                          | <do statement>
                                          | <for statement>
                                          | <foreach statement>
-<while statement>                      ::= 'while' '(' <boolean expression> )' <embedded statement>
+<while statement>                      ::= 'while' '(' <boolean expression> ')' <embedded statement>
 <do statement>                         ::= 'do' <embedded statement> 'while' '(' <boolean expression> ')' ';'
 <for statement>                        ::= 'for' '(' <for initializer opt> ';' <for condition opt> ';' <for iterator opt> ')' <embedded statement>
 <for initializer opt>                  ::= <for initializer>
@@ -514,7 +531,7 @@ __[ syntactic grammar ]__
 <continue statement>                   ::= 'continue' ';'
 <goto statement>                       ::= 'goto' <identifier> ';'
                                          | 'goto' 'case' <constant expression> ';'
-                                         | 'goto' 'default' ';
+                                         | 'goto' 'default' ';'
 <return statement>                     ::= 'return' <expression opt> ';'
 <expression opt>                       ::= <expression>
 <expression opt>                       ::=
@@ -553,7 +570,7 @@ __[ syntactic grammar ]__
 <namespace declaration>                ::= 'namespace' <qualified identifier> <namespace body> ';'
                                          | 'namespace' <qualified identifier> <namespace body>
 <qualified identifier>                 ::= <identifier>+  separator => ',' proper => 1 # No hide-separator
-<namespace body>                       ::= '{' <extern alias directives opt> <using directives opt> namespace member declarations opt> '}'
+<namespace body>                       ::= '{' <extern alias directives opt> <using directives opt> <namespace member declarations opt> '}'
 <extern alias directives opt>          ::= <extern alias directives>
 <extern alias directives opt>          ::=
 <using directives opt>                 ::= <using directives>
@@ -578,7 +595,7 @@ __[ syntactic grammar ]__
 <qualified alias member>               ::= <identifier> '::' <identifier> <type argument list opt>
 <type argument list opt>               ::= <type argument list>
 <type argument list opt>               ::=
-<fixed size buffer-declaration>        ::= <attributes opt> <fixed size buffer modifiers opt> 'fixed' <buffer element type> <fixed size buffer declarators> ';'
+<fixed size buffer declaration>        ::= <attributes opt> <fixed size buffer modifiers opt> 'fixed' <buffer element type> <fixed size buffer declarators> ';'
 <fixed size buffer modifiers>          ::= <fixed size buffer modifier>+
 <fixed size buffer modifier>           ::= 'new'
                                          | 'public'
@@ -638,7 +655,7 @@ __[ syntactic grammar ]__
                                          | 'struct'
 <secondary constraints>                ::= <interface type>
                                          | <type parameter>
-                                         | <secondary constraints ',' <interface type>
+                                         | <secondary constraints> ',' <interface type>
                                          | <secondary constraints> ',' <type parameter>
 <constructor constraint>               ::= 'new' '(' ')'
 <class body>                           ::= '{' <class member declarations opt> '}'
