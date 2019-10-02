@@ -112,9 +112,32 @@ __[ syntactic grammar ]__
 # -----
 # Types
 # -----
-type                                   ::= <reference type>
+<type>                                 ::= <reference type>
                                          | <value type>
                                          | <type parameter>
+                                         | <pointer type>
+<reference type>                       ::= <class type>
+                                         | <interface type>
+                                         | <array type>
+                                         | <delegate type>
+                                         | 'dynamic'
+<class type>                           ::= <type name>
+                                         | 'object'
+                                         | 'string'
+<interface type>                       ::= <type name>
+<array type>                           ::= <non array type> <rank specifiers>
+<non array type>                       ::= <value type>
+                                         | <class type>
+                                         | <interface type>
+                                         | <delegate type>
+                                         | 'dynamic'
+                                         | <type parameter>
+                                         | <pointer type>
+<rank specifiers>                      ::= <rank specifier>+
+<rank specifier>                       ::= '[' <dim separators opt> ']'
+<dim separators>                       ::= ','+
+<delegate type>                        ::= <type name>
+
 <value type>                           ::= <struct type>
                                          | <enum type>
 <struct type>                          ::= <type name>
@@ -143,6 +166,10 @@ type                                   ::= <reference type>
 <type arguments>                       ::= <type argument>+ separator => ',' proper => 1 hide-separator => 1
 <type argument>                        ::= <type>
 <type parameter>                       ::= <identifier>
+
+<pointer type>                         ::= <unmanaged type> '*'
+                                         | 'void' '*'
+<unmanaged type>                       ::= <type>
 
 # ---------
 # Variables
@@ -181,6 +208,8 @@ type                                   ::= <reference type>
                                          | <unchecked expression>
                                          | <default value expression>
                                          | <anonymous method expression>
+                                         | <pointer member access>
+                                         | <pointer element access>
 <simple name>                          ::= <identifier> <type argument list opt>
 <type argument list opt>               ::= <type argument list>
 <type argument list opt>               ::=
@@ -273,10 +302,13 @@ type                                   ::= <reference type>
                                          | <pre decrement expression>
                                          | <cast expression>
                                          | <await expression>
+                                         | <pointer indirection expression>
+                                         | <addressof expression>
 <pre increment expression>             ::= '++' <unary expression>
 <pre decrement expression>             ::= '--' <unary expression>
 <cast expression>                      ::= '(' <type> ')' <unary expression>
 <await expression>                     ::= 'await' <unary expression>
+<pointer indirection expression>       ::= '*' <unary expression>
 <multiplicative expression>            ::= <unary expression>
                                          | <multiplicative expression> '*' <unary expression>
                                          | <multiplicative expression> '/' <unary expression>
@@ -387,6 +419,9 @@ type                                   ::= <reference type>
                                          | <query expression>
 <constant expression>                  ::= <expression>
 <boolean expression>                   ::= <expression>
+<pointer member access>                ::= <primary expression> '->' <identifier> <type argument list opt>
+<pointer element access>               ::= <primary no array creation expression> '[' <expression> ']'
+<addressof expression>                 ::= '&' <unary expression>
 
 # ----------
 # Statements
@@ -406,6 +441,8 @@ type                                   ::= <reference type>
                                          | <lock statement>
                                          | <using statement>
                                          | <yield statement>
+                                         | <unsafe statement>
+                                         | <fixed statement>
 <block>                                ::= '{' <statement list opt> '}'
 <statement list opt>                   ::= <statement list>
 <statement list opt>                   ::=
@@ -422,6 +459,8 @@ type                                   ::= <reference type>
                                          | <identifier> '=' <local variable initializer>
 <local variable initializer>           ::= <expression>
                                          | <array initializer>
+                                         | <stackalloc initializer>
+<stackalloc initializer>               ::= 'stackalloc' <unmanaged type> '[' <expression> ']'
 <local constant declaration>           ::= 'const' <type> <constant declarators>
 <constant declarators>                 ::= <constant declarator>+ separator => ','  proper => 1 hide-separator => 1
 <constant declarator>                  ::= <identifier> '=' <constant expression>
@@ -500,6 +539,12 @@ type                                   ::= <reference type>
                                          | <expression>
 <yield statement>                      ::= 'yield' 'return' <expression> ';'
                                          | 'yield' 'break' ';'
+<unsafe statement>                     ::= 'unsafe' <block>
+<fixed statement>                      ::= 'fixed' '(' <pointer type> <fixed pointer declarators> ')' <embedded statement>
+<fixed pointer declarators>            ::= <fixed pointer declarator>+  separator => ',' proper => 1 # No hide-separator
+<fixed pointer declarator>             ::= <identifier> '=' <fixed pointer initializer>
+<fixed pointer initializer>            ::= '&' <variable reference>
+                                         | <expression>
 
 # ----------
 # Namespaces
@@ -533,6 +578,17 @@ type                                   ::= <reference type>
 <qualified alias member>               ::= <identifier> '::' <identifier> <type argument list opt>
 <type argument list opt>               ::= <type argument list>
 <type argument list opt>               ::=
+<fixed size buffer-declaration>        ::= <attributes opt> <fixed size buffer modifiers opt> 'fixed' <buffer element type> <fixed size buffer declarators> ';'
+<fixed size buffer modifiers>          ::= <fixed size buffer modifier>+
+<fixed size buffer modifier>           ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'unsafe'
+<buffer element type>                  ::= <type>
+<fixed size buffer declarators>        ::= <fixed size buffer declarator>+ separator => ','  proper => 1 hide-separator => 1
+<fixed size buffer declarator>         ::= <identifier> '[' <constant expression> ']'
 
 # -------
 # Classes
@@ -560,6 +616,7 @@ type                                   ::= <reference type>
                                          | 'abstract'
                                          | 'sealed'
                                          | 'static'
+                                         | 'unsafe'
 <type parameter list>                  ::= '<' <type parameters> '>'
 <type parameters>                      ::= <attributes opt> <type parameter>
                                          | <type parameters> ',' <attributes opt> <type parameter>
@@ -618,6 +675,7 @@ type                                   ::= <reference type>
                                          | 'static'
                                          | 'readonly'
                                          | 'volatile'
+                                         | 'unsafe'
 <variable declarators>                 ::= <variable declarator>+ separator => ','  proper => 1 hide-separator => 1
 <variable declarator>                  ::= <identifier>
                                          | <identifier> '=' <variable initializer>
@@ -638,6 +696,7 @@ type                                   ::= <reference type>
                                          | 'abstract'
                                          | 'extern'
                                          | 'async'
+                                         | 'unsafe'
 <return type>                          ::= <type>
                                          | 'void'
 <method body>                          ::= <block>
@@ -666,6 +725,7 @@ type                                   ::= <reference type>
                                          | 'override'
                                          | 'abstract'
                                          | 'extern'
+                                         | 'unsafe'
 <accessor declarations>                ::= <get accessor declaration> <set accessor declaration opt>
                                          | <set accessor declaration> <get accessor declaration opt>
 <get accessor declaration>             ::= <attributes opt> <accessor modifier opt> 'get' <accessor body>
@@ -691,6 +751,7 @@ type                                   ::= <reference type>
                                          | 'override'
                                          | 'abstract'
                                          | 'extern'
+                                         | 'unsafe'
 <event accessor declarations>          ::= <add accessor declaration> <remove accessor declaration>
                                          | <remove accessor declaration> <add accessor declaration>
 <add accessor declaration>             ::= <attributes opt> 'add' <block>
@@ -707,6 +768,7 @@ type                                   ::= <reference type>
                                          | 'override'
                                          | 'abstract'
                                          | 'extern'
+                                         | 'unsafe'
 <indexer declarator>                   ::= <type> 'this' '[' <formal parameter list> ']'
                                          | <type> <interface type> '.' 'this' '[' <formal parameter list> ']'
 <operator declaration>                 ::= <attributes opt> <operator modifiers> <operator declarator> <operator body>
@@ -714,6 +776,7 @@ type                                   ::= <reference type>
 <operator modifier>                    ::= 'public'
                                          | 'static'
                                          | 'extern'
+                                         | 'unsafe'
 <operator declarator>                  ::= <unary operator declarator>
                                          | <binary operator declarator>
                                          | <conversion operator declarator>
@@ -754,22 +817,152 @@ type                                   ::= <reference type>
                                          | 'internal'
                                          | 'private'
                                          | 'extern'
+                                         | 'unsafe'
 <constructor declarator>               ::= <identifier> '(' <formal parameter list opt> ')' <constructor initializer opt>
 <constructor initializer>              ::= ':' 'base' '(' <argument list opt> ')'
                                          | ':' 'this' '(' <argument list opt> ')'
 <constructor body>                     ::= <block>
                                          | ';'
 <static constructor declaration>       ::= <attributes opt> <static constructor modifiers> <identifier> '(' ')' <static constructor body>
-<static constructor modifiers>         ::= <extern opt> 'static'
-                                         | 'static' <extern opt>
+<static constructor modifiers>         ::= <extern opt> <unsafe opt> 'static'
+                                         | <unsafe opt> <extern opt> 'static'
+                                         | <extern opt> 'static' <unsafe opt>
+                                         | <unsafe opt> 'static' <extern opt>
+                                         | 'static' <extern opt> <unsafe opt>
+                                         | 'static' <unsafe opt> <extern opt>
 <extern opt>                           ::= 'extern'
 <extern opt>                           ::=
 <static constructor body>              ::= <block>
                                          | ';'
-<finalizer declaration>                ::= <attributes opt> <extern opt> '~' <identifier> '(' ')' <finalizer body>
+<finalizer declaration>                ::= <attributes opt> <extern opt> <unsafe opt> '~' <identifier> '(' ')' <finalizer body>
+                                         | <attributes opt> <unsafe opt> <extern opt> '~' <identifier> '(' ')' <finalizer body>
 <finalizer body>                       ::= <block>
                                          | ';'
 
 # -------
 # Structs
 # -------
+<struct declaration>                   ::= <attributes opt> <struct modifiers opt> <partial opt> 'struct' <identifier> <type parameter list opt> <struct interfaces opt> <type parameter constraints clauses opt> <struct body> <semicolon opt>
+<struct modifiers>                     ::= <struct modifier>+
+<struct modifier>                      ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'unsafe'
+<struct interfaces>                    ::= ':' <interface type list>
+<struct body>                          ::= '{' <struct member declarations opt> '}'
+<struct member declarations>           ::= <struct member declaration>+
+<struct member declaration>            ::= <constant declaration>
+                                         | <field declaration>
+                                         | <method declaration>
+                                         | <property declaration>
+                                         | <event declaration>
+                                         | <indexer declaration>
+                                         | <operator declaration>
+                                         | <constructor declaration>
+                                         | <static constructor declaration>
+                                         | <type declaration>
+                                         | <fixed size buffer declaration>
+# ------
+# Arrays
+# ------
+<array initializer>                    ::= '{' <variable initializer list opt> '}'
+                                         | '{' <variable initializer list> ',' '}'
+<variable initializer list>            ::= <variable initializer>+ separator => ','  proper => 1 hide-separator => 1
+<variable initializer>                 ::= <expression>
+                                         | <array initializer>
+
+# ----------
+# Interfaces
+# ----------
+<interface declaration>                ::= <attributes opt> <interface modifiers opt> <partial opt> 'interface' <identifier> <variant type parameter list opt> <interface base opt> <type parameter constraints clauses opt> <interface body> <semicolon opt>
+<interface modifiers>                  ::= <interface modifier>+
+<interface modifier>                   ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'unsafe'
+<variant type parameter list>          ::= '<' <variant type parameters> '>'
+<variant type parameters>              ::= <variant type parameter>+ separator => ','  proper => 1 hide-separator => 1
+<variant type parameter>               ::= <attributes opt> <variance annotation opt> <type parameter>
+<variance annotation>                  ::= 'in'
+                                         | 'out'
+<interface base>                       ::= ':' <interface type list>
+<interface body>                       ::= '{' <interface member declarations opt> '}'
+<interface member declarations>        ::= <interface member declaration>+
+<interface member declaration>         ::= <interface method declaration>
+                                         | <interface property declaration>
+                                         | <interface event declaration>
+                                         | <interface indexer declaration>
+<interface method declaration>         ::= <attributes opt> <new opt> <return type> <identifier> <type parameter list opt> '(' <formal parameter list opt> ')' <type parameter constraints clauses opt> ';'
+<interface property declaration>       ::= <attributes opt> <new opt> <type> <identifier> '{' <interface accessors> '}'
+<interface accessors>                  ::= <attributes opt> 'get' ';'
+                                         | <attributes opt> 'set' ';'
+                                         | <attributes opt> 'get' ';' <attributes opt> 'set' ';'
+                                         | <attributes opt> 'set' ';' <attributes opt> 'get' ';'
+<interface event declaration>          ::= <attributes opt> <new opt> 'event' <type> <identifier> ';'
+<interface indexer declaration>        ::= <attributes opt> <new opt> <type> 'this' '[' <formal parameter list> ']' '{' <interface accessors> '}'
+
+# -----
+# Enums
+# -----
+<enum declaration>                     ::= <attributes opt> <enum modifiers opt> 'enum' <identifier> <enum base opt> <enum body> <semicolon opt>
+<enum base>                            ::= ':' <integral type>
+<enum body>                            ::= '{' <enum member declarations opt> '}'
+                                         | '{' <enum member declarations> ',' '}'
+<enum modifiers>                       ::= <enum modifier>+
+<enum modifier>                        ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+<enum member declarations>             ::= <enum member declaration>+ separator => ','  proper => 1 hide-separator => 1
+<enum member declaration>              ::= <attributes opt> <identifier>
+                                         | <attributes opt> <identifier> '=' <constant expression>
+
+# ---------
+# Delegates
+# ---------
+<delegate declaration>                 ::= <attributes opt> <delegate modifiers opt> 'delegate' <return type> <identifier> <variant type parameter list opt> '(' <formal parameter list opt> ')' <type parameter constraints clauses opt> ';'
+<delegate modifiers>                   ::= <delegate modifier>+
+<delegate modifier>                    ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'unsafe'
+# ----------
+# Attributes
+# ----------
+<global attributes>                    ::= <global attribute sections>
+<global attribute sections>            ::= <global attribute section>+
+<global attribute section>             ::= '[' <global attribute target specifier> <attribute list> ']'
+                                         | '[' <global attribute target specifier> <attribute list> ',' ']'
+<global attribute target specifier>    ::= <global attribute target> ':'
+<global attribute target>              ::= <IDENTIFIER EQUAL TO assembly OR module>
+<attributes>                           ::= <attribute sections>
+<attribute sections>                   ::= <attribute section>+
+<attribute section>                    ::= '[' <attribute target specifier opt> <attribute list> ']'
+                                         | '[' <attribute target specifier opt> <attribute list> ',' ']'
+<attribute target specifier>           ::= <attribute target> ':'
+<attribute target>                     ::= <IDENTIFIER NOT EQUAL TO assembly OR module>
+                                         | <keyword>
+<attribute list>                       ::= <attribute>+ separator => ','  proper => 1 hide-separator => 1
+<attribute>                            ::= <attribute name> <attribute arguments opt>
+<attribute name>                       ::= <type name>
+<attribute arguments>                  ::= '(' <positional argument list opt> ')'
+                                         | '(' <positional argument list> ',' <named argument list> ')'
+                                         | '(' <named argument list> ')'
+<positional argument list>             ::= <positional argument>+ separator => ','  proper => 1 hide-separator => 1
+<positional argument>                  ::= <argument name opt> <attribute argument expression>
+<named argument list>                  ::= <named argument>+ separator => ','  proper => 1 hide-separator => 1
+<named argument>                       ::= <identifier> '=' <attribute argument expression>
+<attribute argument expression>        ::= <expression>
+
+# -------------
+# Documentation
+# -------------
+<single line doc comment>              ::= '///' <input characters opt>
+<delimited doc comment>                ::= '/**' <delimited comment text opt> '*/'
