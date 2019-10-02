@@ -533,3 +533,162 @@ type                                   ::= <reference type>
 <qualified alias member>               ::= <identifier> '::' <identifier> <type argument list opt>
 <type argument list opt>               ::= <type argument list>
 <type argument list opt>               ::=
+
+# -------
+# Classes
+# -------
+<class declaration>                    ::= <attributes opt> <class modifiers opt> <partial opt> 'class' <identifier> <type parameter list opt> <class base opt> <type parameter constraints clauses opt> <class body> ';'
+                                         | <attributes opt> <class modifiers opt> <partial opt> 'class' <identifier> <type parameter list opt> <class base opt> <type parameter constraints clauses opt> <class body>
+<attributes opt>                       ::= <attributes>
+<attributes opt>                       ::=
+<class modifiers opt>                  ::= <class modifiers opt>
+<class modifiers opt>                  ::=
+<partial opt>                          ::= 'partial'
+<partial opt>                          ::=
+<type parameter list opt>              ::= <type parameter list>
+<type parameter list opt>              ::=
+<class base opt>                       ::= <class base>
+<class base opt>                       ::=
+<type parameter constraints clauses opt> ::= <type parameter constraints clauses>
+<type parameter constraints clauses opt> ::=
+<class modifiers>                      ::= <class modifier>+
+<class modifier>                       ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'abstract'
+                                         | 'sealed'
+                                         | 'static'
+<type parameter list>                  ::= '<' <type parameters> '>'
+<type parameters>                      ::= <attributes opt> <type parameter>
+                                         | <type parameters> ',' <attributes opt> <type parameter>
+<class base>                           ::= ':' <class type>
+                                         | ':' <interface type list>
+                                         | ':' <class type> ',' <interface type list>
+<interface type list>                  ::= <interface type>+ separator => ','  proper => 1 hide-separator => 1
+<type parameter constraints clauses>   ::= <type parameter constraints clause>+
+<type parameter constraints clause>    ::= 'where' <type parameter> ':' <type parameter constraints>
+<type parameter constraints>           ::= <primary constraint>
+                                         | <secondary constraints>
+                                         | <constructor constraint>
+                                         | <primary constraint> ',' <secondary constraints>
+                                         | <primary constraint> ',' <constructor constraint>
+                                         | <secondary constraints> ',' <constructor constraint>
+                                         | <primary constraint> ',' <secondary constraints> ',' <constructor constraint>
+<primary constraint>                   ::= <class type>
+                                         | 'class'
+                                         | 'struct'
+<secondary constraints>                ::= <interface type>
+                                         | <type parameter>
+                                         | <secondary constraints ',' <interface type>
+                                         | <secondary constraints> ',' <type parameter>
+<constructor constraint>               ::= 'new' '(' ')'
+<class body>                           ::= '{' <class member declarations opt> '}'
+<class member declarations opt>        ::= <class member declarations>
+<class member declarations opt>        ::=
+<class member declarations>            ::= <class member declaration>+
+<class member declaration>             ::= <constant declaration>
+                                         | <field declaration>
+                                         | <method declaration>
+                                         | <property declaration>
+                                         | <event declaration>
+                                         | <indexer declaration>
+                                         | <operator declaration>
+                                         | <constructor declaration>
+                                         | <finalizer declaration>
+                                         | <static constructor declaration>
+                                         | <type declaration>
+<constant declaration>                 ::= <attributes opt> <onstant modifiers opt> 'const' <type> <constant declarators> ';'
+<constant modifiers>                   ::= <constant modifier>+
+<constant modifier>                    ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+<constant declarators>                 ::= <constant declarator>+ separator => ','  proper => 1 hide-separator => 1
+<constant declarator>                  ::= <identifier> '=' <constant expression>
+<field declaration>                    ::= <attributes opt> <field modifiers opt> <type> <variable declarators> ';'
+<field modifiers>                      ::= <field modifier>+
+<field modifier>                       ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'static'
+                                         | 'readonly'
+                                         | 'volatile'
+<variable declarators>                 ::= <variable declarator>+ separator => ','  proper => 1 hide-separator => 1
+<variable declarator>                  ::= <identifier>
+                                         | <identifier> '=' <variable initializer>
+<variable initializer>                 ::= <expression>
+                                         | <array initializer>
+<method declaration>                   ::= <method header> <method body>
+<method header>                        ::= <attributes opt> <method modifiers opt> <partial opt> <return type> <member name> <type parameter list opt> '(' <formal parameter list opt> ')' <type parameter constraints clauses opt>
+<method modifiers>                     ::= <method modifier>+
+<method modifier>                      ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'static'
+                                         | 'virtual'
+                                         | 'sealed'
+                                         | 'override'
+                                         | 'abstract'
+                                         | 'extern'
+                                         | 'async'
+<return type>                          ::= <type>
+                                         | 'void'
+<method body>                          ::= <block>
+                                         | ';'
+<formal parameter list>                ::= <fixed parameters>
+                                         | <fixed parameters> ',' <parameter array>
+                                         | <parameter array>
+<fixed parameters>                     ::= <fixed parameter>+ separator => ','  proper => 1 hide-separator => 1
+<fixed parameter>                      ::= <attributes opt> <parameter modifier opt> <type> <identifier> <default argument opt>
+<default argument>                     ::= '=' <expression>
+<parameter modifier>                   ::= <parameter mode modifier>
+                                         | 'this'
+<parameter mode modifier>              ::= 'ref'
+                                         | 'out'
+<parameter array>                      ::= <attributes opt> 'params' <array type> <identifier>
+<property declaration>                 ::= <attributes opt> <property modifiers opt> <type> <member name> '{' <accessor declarations> '}'
+<property modifiers>                   ::= <property modifier>+
+<property modifier>                    ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'static'
+                                         | 'virtual'
+                                         | 'sealed'
+                                         | 'override'
+                                         | 'abstract'
+                                         | 'extern'
+<accessor declarations>                ::= <get accessor declaration> <set accessor declaration opt>
+                                         | <set accessor declaration> <get accessor declaration opt>
+<get accessor declaration>             ::= <attributes opt> <accessor modifier opt> 'get' <accessor body>
+<set accessor declaration>             ::= <attributes opt> <accessor modifier opt> 'set' <accessor body>
+<accessor modifier>                    ::= 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'protected' 'internal'
+                                         | 'internal' 'protected'
+<accessor body>                        ::= <block>
+                                         | ';'
+<event declaration>                    ::= <attributes opt> <event modifiers opt> 'event' <type> <variable declarators> ';'
+                                         | <attributes opt> <event modifiers opt> 'event' <type> <member name> '{' <event accessor declarations> '}'
+<event modifiers>                      ::= <event modifier>+
+<event modifier>                       ::= 'new'
+                                         | 'public'
+                                         | 'protected'
+                                         | 'internal'
+                                         | 'private'
+                                         | 'static'
+                                         | 'virtual'
+                                         | 'sealed'
+                                         | 'override'
+                                         | 'abstract'
+                                         | 'extern'
+
