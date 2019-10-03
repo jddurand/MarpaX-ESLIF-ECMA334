@@ -152,6 +152,8 @@ __[ syntactic grammar ]__
                                          | <pointer type>
 <rank specifiers>                      ::= <rank specifier>+
 <rank specifier>                       ::= '[' <dim separators opt> ']'
+<dim separators opt>                   ::= <dim separators>
+<dim separators opt>                   ::=
 <dim separators>                       ::= ','+
 <delegate type>                        ::= <type name>
 
@@ -159,7 +161,7 @@ __[ syntactic grammar ]__
                                          | <enum type>
 <struct type>                          ::= <type name>
                                            <simple type>
-                                           <nullable value type>
+                                           <nullable type>
 <simple type>                          ::= <numeric type>
                                          | 'bool'
 <numeric type>                         ::= <integral type>
@@ -175,7 +177,7 @@ __[ syntactic grammar ]__
                                          | 'ulong'
                                          | 'char'
 <nullable type>                        ::= <non nullable value type> '?'
-<non nullable value type>              ::= 'type'
+<non nullable value type>              ::= <type>
 <floating point type>                  ::= 'float'
                                          | 'double'
 <enum type>                            ::= <type name>
@@ -268,7 +270,7 @@ __[ syntactic grammar ]__
                                          | '{' <member initializer list> ',' '}'
 <member initializer list opt>          ::= <member initializer list>
 <member initializer list opt>          ::=
-<member initializer list>              ::= <member initializer> separator => ','  proper => 1 hide-separator => 1
+<member initializer list>              ::= <member initializer>+ separator => ','  proper => 1 hide-separator => 1
 <member initializer>                   ::= <identifier> '=' <initializer value>
 <initializer value>                    ::= <expression>
                                          | <object or collection initializer>
@@ -298,6 +300,7 @@ __[ syntactic grammar ]__
 <typeof expression>                    ::= 'typeof' '(' <type> ')'
                                          | 'typeof' '(' <unbound type name> ')'
                                          | 'typeof' '(' 'void' ')'
+<sizeof expression>                    ::= 'sizeof' '(' <unmanaged type> ')'
 <unbound type name>                    ::= <identifier> <generic dimension specifier opt>
                                          | <identifier> '::' <identifier> <generic dimension specifier opt>
                                          | <unbound type name> '.' <identifier> <generic dimension specifier opt>
@@ -546,6 +549,8 @@ __[ syntactic grammar ]__
 <specific catch clauses opt>           ::=
 <specific catch clauses>               ::= <specific catch clause>+
 <specific catch clause>                ::= 'catch' '(' <type> <identifier opt> ')' <block>
+<identifier opt>                       ::= <identifier>
+<identifier opt>                       ::=
 <general catch clause>                 ::= 'catch' <block>
 <finally clause>                       ::= 'finally' <block>
 <checked statement>                    ::= 'checked' <block>
@@ -567,6 +572,8 @@ __[ syntactic grammar ]__
 # Namespaces
 # ----------
 <compilation unit>                     ::= <extern alias directives opt> <using directives opt> <global attributes opt> <namespace member declarations opt>
+<global attributes opt>                ::= <global attributes>
+<global attributes opt>                ::=
 <namespace declaration>                ::= 'namespace' <qualified identifier> <namespace body> ';'
                                          | 'namespace' <qualified identifier> <namespace body>
 <qualified identifier>                 ::= <identifier>+  separator => ',' proper => 1 # No hide-separator
@@ -593,9 +600,9 @@ __[ syntactic grammar ]__
                                          | <enum declaration>
                                          | <delegate declaration>
 <qualified alias member>               ::= <identifier> '::' <identifier> <type argument list opt>
-<type argument list opt>               ::= <type argument list>
-<type argument list opt>               ::=
 <fixed size buffer declaration>        ::= <attributes opt> <fixed size buffer modifiers opt> 'fixed' <buffer element type> <fixed size buffer declarators> ';'
+<fixed size buffer modifiers opt>      ::= <fixed size buffer modifiers>
+<fixed size buffer modifiers opt>      ::=
 <fixed size buffer modifiers>          ::= <fixed size buffer modifier>+
 <fixed size buffer modifier>           ::= 'new'
                                          | 'public'
@@ -673,16 +680,18 @@ __[ syntactic grammar ]__
                                          | <finalizer declaration>
                                          | <static constructor declaration>
                                          | <type declaration>
-<constant declaration>                 ::= <attributes opt> <onstant modifiers opt> 'const' <type> <constant declarators> ';'
+<constant declaration>                 ::= <attributes opt> <constant modifiers opt> 'const' <type> <constant declarators> ';'
+<constant modifiers opt>               ::= <constant modifiers>
+<constant modifiers opt>               ::=
 <constant modifiers>                   ::= <constant modifier>+
 <constant modifier>                    ::= 'new'
                                          | 'public'
                                          | 'protected'
                                          | 'internal'
                                          | 'private'
-<constant declarators>                 ::= <constant declarator>+ separator => ','  proper => 1 hide-separator => 1
-<constant declarator>                  ::= <identifier> '=' <constant expression>
 <field declaration>                    ::= <attributes opt> <field modifiers opt> <type> <variable declarators> ';'
+<field modifiers opt>                  ::= <field modifiers>
+<field modifiers opt>                  ::=
 <field modifiers>                      ::= <field modifier>+
 <field modifier>                       ::= 'new'
                                          | 'public'
@@ -700,6 +709,10 @@ __[ syntactic grammar ]__
                                          | <array initializer>
 <method declaration>                   ::= <method header> <method body>
 <method header>                        ::= <attributes opt> <method modifiers opt> <partial opt> <return type> <member name> <type parameter list opt> '(' <formal parameter list opt> ')' <type parameter constraints clauses opt>
+<formal parameter list opt>            ::= <formal parameter list>
+<formal parameter list opt>            ::=
+<method modifiers opt>                 ::= <method modifiers>
+<method modifiers opt>                 ::=
 <method modifiers>                     ::= <method modifier>+
 <method modifier>                      ::= 'new'
                                          | 'public'
@@ -716,6 +729,8 @@ __[ syntactic grammar ]__
                                          | 'unsafe'
 <return type>                          ::= <type>
                                          | 'void'
+<member name>                          ::= <identifier>
+                                         | <interface type> '.' <identifier>
 <method body>                          ::= <block>
                                          | ';'
 <formal parameter list>                ::= <fixed parameters>
@@ -723,6 +738,10 @@ __[ syntactic grammar ]__
                                          | <parameter array>
 <fixed parameters>                     ::= <fixed parameter>+ separator => ','  proper => 1 hide-separator => 1
 <fixed parameter>                      ::= <attributes opt> <parameter modifier opt> <type> <identifier> <default argument opt>
+<default argument opt>                 ::= <default argument>
+<default argument opt>                 ::=
+<parameter modifier opt>               ::= <parameter modifier>
+<parameter modifier opt>               ::=
 <default argument>                     ::= '=' <expression>
 <parameter modifier>                   ::= <parameter mode modifier>
                                          | 'this'
@@ -730,6 +749,8 @@ __[ syntactic grammar ]__
                                          | 'out'
 <parameter array>                      ::= <attributes opt> 'params' <array type> <identifier>
 <property declaration>                 ::= <attributes opt> <property modifiers opt> <type> <member name> '{' <accessor declarations> '}'
+<property modifiers opt>               ::= <property modifiers>
+<property modifiers opt>               ::=
 <property modifiers>                   ::= <property modifier>+
 <property modifier>                    ::= 'new'
                                          | 'public'
@@ -745,8 +766,14 @@ __[ syntactic grammar ]__
                                          | 'unsafe'
 <accessor declarations>                ::= <get accessor declaration> <set accessor declaration opt>
                                          | <set accessor declaration> <get accessor declaration opt>
+<set accessor declaration opt>         ::= <set accessor declaration>
+<set accessor declaration opt>         ::=
+<get accessor declaration opt>         ::= <get accessor declaration>
+<get accessor declaration opt>         ::=
 <get accessor declaration>             ::= <attributes opt> <accessor modifier opt> 'get' <accessor body>
 <set accessor declaration>             ::= <attributes opt> <accessor modifier opt> 'set' <accessor body>
+<accessor modifier opt>                ::= <accessor modifier>
+<accessor modifier opt>                ::=
 <accessor modifier>                    ::= 'protected'
                                          | 'internal'
                                          | 'private'
@@ -756,6 +783,8 @@ __[ syntactic grammar ]__
                                          | ';'
 <event declaration>                    ::= <attributes opt> <event modifiers opt> 'event' <type> <variable declarators> ';'
                                          | <attributes opt> <event modifiers opt> 'event' <type> <member name> '{' <event accessor declarations> '}'
+<event modifiers opt>                  ::= <event modifiers>
+<event modifiers opt>                  ::=
 <event modifiers>                      ::= <event modifier>+
 <event modifier>                       ::= 'new'
                                          | 'public'
@@ -774,6 +803,8 @@ __[ syntactic grammar ]__
 <add accessor declaration>             ::= <attributes opt> 'add' <block>
 <remove accessor declaration>          ::= <attributes opt> 'remove' <block>
 <indexer declaration>                  ::= <attributes opt> <indexer modifiers opt> <indexer declarator> '{' <accessor declarations> '}'
+<indexer modifiers opt>                ::= <indexer modifiers>
+<indexer modifiers opt>                ::=
 <indexer modifiers>                    ::= <indexer modifier>+
 <indexer modifier>                     ::= 'new'
                                          | 'public'
@@ -823,11 +854,15 @@ __[ syntactic grammar ]__
                                          | '^'
                                          | '<<'
                                          | <right shift>
+<right shift>                           ::= '>' '>'
+<right shift assignment>                ::= '>' '>='
 <conversion operator declarator>       ::= 'implicit' 'operator' <type> '(' <fixed parameter> ')'
                                          | 'explicit' 'operator' <type> '(' <fixed parameter> ')'
 <operator body>                        ::= <block>
                                          | ';'
 <constructor declaration>              ::= <attributes opt> <constructor modifiers opt> <constructor declarator> <constructor body>
+<constructor modifiers opt>            ::= <constructor modifiers>
+<constructor modifiers opt>            ::=
 <constructor modifiers>                ::= <constructor modifier>+
 <constructor modifier>                 ::= 'public'
                                          | 'protected'
@@ -836,6 +871,8 @@ __[ syntactic grammar ]__
                                          | 'extern'
                                          | 'unsafe'
 <constructor declarator>               ::= <identifier> '(' <formal parameter list opt> ')' <constructor initializer opt>
+<constructor initializer opt>          ::= <constructor initializer>
+<constructor initializer opt>          ::=
 <constructor initializer>              ::= ':' 'base' '(' <argument list opt> ')'
                                          | ':' 'this' '(' <argument list opt> ')'
 <constructor body>                     ::= <block>
@@ -847,6 +884,8 @@ __[ syntactic grammar ]__
                                          | <unsafe opt> 'static' <extern opt>
                                          | 'static' <extern opt> <unsafe opt>
                                          | 'static' <unsafe opt> <extern opt>
+<unsafe opt>                           ::= 'unsafe'
+<unsafe opt>                           ::=
 <extern opt>                           ::= 'extern'
 <extern opt>                           ::=
 <static constructor body>              ::= <block>
@@ -860,6 +899,12 @@ __[ syntactic grammar ]__
 # Structs
 # -------
 <struct declaration>                   ::= <attributes opt> <struct modifiers opt> <partial opt> 'struct' <identifier> <type parameter list opt> <struct interfaces opt> <type parameter constraints clauses opt> <struct body> <semicolon opt>
+<struct modifiers opt>                 ::= <struct modifiers>
+<struct modifiers opt>                 ::=
+<struct interfaces opt>                ::= <struct interfaces>
+<struct interfaces opt>                ::=
+<semicolon opt>                        ::= ';'
+<semicolon opt>                        ::=
 <struct modifiers>                     ::= <struct modifier>+
 <struct modifier>                      ::= 'new'
                                          | 'public'
@@ -869,6 +914,8 @@ __[ syntactic grammar ]__
                                          | 'unsafe'
 <struct interfaces>                    ::= ':' <interface type list>
 <struct body>                          ::= '{' <struct member declarations opt> '}'
+<struct member declarations opt>       ::= <struct member declarations>
+<struct member declarations opt>       ::=
 <struct member declarations>           ::= <struct member declaration>+
 <struct member declaration>            ::= <constant declaration>
                                          | <field declaration>
@@ -886,14 +933,20 @@ __[ syntactic grammar ]__
 # ------
 <array initializer>                    ::= '{' <variable initializer list opt> '}'
                                          | '{' <variable initializer list> ',' '}'
+<variable initializer list opt>        ::= <variable initializer list>
+<variable initializer list opt>        ::=
 <variable initializer list>            ::= <variable initializer>+ separator => ','  proper => 1 hide-separator => 1
-<variable initializer>                 ::= <expression>
-                                         | <array initializer>
 
 # ----------
 # Interfaces
 # ----------
 <interface declaration>                ::= <attributes opt> <interface modifiers opt> <partial opt> 'interface' <identifier> <variant type parameter list opt> <interface base opt> <type parameter constraints clauses opt> <interface body> <semicolon opt>
+<interface modifiers opt>              ::= <interface modifiers>
+<interface modifiers opt>              ::=
+<variant type parameter list opt>      ::= <variant type parameter list>
+<variant type parameter list opt>      ::=
+<interface base opt>                   ::= <interface base>
+<interface base opt>                   ::=
 <interface modifiers>                  ::= <interface modifier>+
 <interface modifier>                   ::= 'new'
                                          | 'public'
@@ -904,16 +957,22 @@ __[ syntactic grammar ]__
 <variant type parameter list>          ::= '<' <variant type parameters> '>'
 <variant type parameters>              ::= <variant type parameter>+ separator => ','  proper => 1 hide-separator => 1
 <variant type parameter>               ::= <attributes opt> <variance annotation opt> <type parameter>
+<variance annotation opt>              ::= <variance annotation>
+<variance annotation opt>              ::=
 <variance annotation>                  ::= 'in'
                                          | 'out'
 <interface base>                       ::= ':' <interface type list>
 <interface body>                       ::= '{' <interface member declarations opt> '}'
+<interface member declarations opt>    ::= <interface member declarations>
+<interface member declarations opt>    ::=
 <interface member declarations>        ::= <interface member declaration>+
 <interface member declaration>         ::= <interface method declaration>
                                          | <interface property declaration>
                                          | <interface event declaration>
                                          | <interface indexer declaration>
 <interface method declaration>         ::= <attributes opt> <new opt> <return type> <identifier> <type parameter list opt> '(' <formal parameter list opt> ')' <type parameter constraints clauses opt> ';'
+<new opt>                              ::= 'new'
+<new opt>                              ::=
 <interface property declaration>       ::= <attributes opt> <new opt> <type> <identifier> '{' <interface accessors> '}'
 <interface accessors>                  ::= <attributes opt> 'get' ';'
                                          | <attributes opt> 'set' ';'
@@ -926,9 +985,15 @@ __[ syntactic grammar ]__
 # Enums
 # -----
 <enum declaration>                     ::= <attributes opt> <enum modifiers opt> 'enum' <identifier> <enum base opt> <enum body> <semicolon opt>
+<enum modifiers opt>                   ::= <enum modifiers>
+<enum modifiers opt>                   ::=
+<enum base opt>                        ::= <enum base>
+<enum base opt>                        ::=
 <enum base>                            ::= ':' <integral type>
 <enum body>                            ::= '{' <enum member declarations opt> '}'
                                          | '{' <enum member declarations> ',' '}'
+<enum member declarations opt>         ::= <enum member declarations>
+<enum member declarations opt>         ::=
 <enum modifiers>                       ::= <enum modifier>+
 <enum modifier>                        ::= 'new'
                                          | 'public'
@@ -943,6 +1008,8 @@ __[ syntactic grammar ]__
 # Delegates
 # ---------
 <delegate declaration>                 ::= <attributes opt> <delegate modifiers opt> 'delegate' <return type> <identifier> <variant type parameter list opt> '(' <formal parameter list opt> ')' <type parameter constraints clauses opt> ';'
+<delegate modifiers opt>               ::= <delegate modifiers>
+<delegate modifiers opt>               ::=
 <delegate modifiers>                   ::= <delegate modifier>+
 <delegate modifier>                    ::= 'new'
                                          | 'public'
@@ -963,15 +1030,21 @@ __[ syntactic grammar ]__
 <attribute sections>                   ::= <attribute section>+
 <attribute section>                    ::= '[' <attribute target specifier opt> <attribute list> ']'
                                          | '[' <attribute target specifier opt> <attribute list> ',' ']'
+<attribute target specifier opt>       ::= <attribute target specifier>
+<attribute target specifier opt>       ::=
 <attribute target specifier>           ::= <attribute target> ':'
 <attribute target>                     ::= <IDENTIFIER NOT EQUAL TO assembly OR module>
                                          | <keyword>
 <attribute list>                       ::= <attribute>+ separator => ','  proper => 1 hide-separator => 1
 <attribute>                            ::= <attribute name> <attribute arguments opt>
 <attribute name>                       ::= <type name>
+<attribute arguments opt>              ::= <attribute arguments>
+<attribute arguments opt>              ::=
 <attribute arguments>                  ::= '(' <positional argument list opt> ')'
                                          | '(' <positional argument list> ',' <named argument list> ')'
                                          | '(' <named argument list> ')'
+<positional argument list opt>         ::= <positional argument list>
+<positional argument list opt>         ::=
 <positional argument list>             ::= <positional argument>+ separator => ','  proper => 1 hide-separator => 1
 <positional argument>                  ::= <argument name opt> <attribute argument expression>
 <named argument list>                  ::= <named argument>+ separator => ','  proper => 1 hide-separator => 1
@@ -982,4 +1055,24 @@ __[ syntactic grammar ]__
 # Documentation
 # -------------
 <single line doc comment>              ::= '///' <input characters opt>
+<input characters opt>                 ::= <input characters>
+<input characters opt>                 ::=
 <delimited doc comment>                ::= '/**' <delimited comment text opt> '*/'
+<delimited comment text opt>           ::= <delimited comment text>
+<delimited comment text opt>           ::=
+
+# --------------------------------------
+# Lexemes (injected after lexical parse)
+# --------------------------------------
+<identifier>                               ::= <IDENTIFIER>
+<IDENTIFIER>                                 ~ [^\s\S] # Matches nothing
+<literal>                                  ::= <LITERAL>
+<LITERAL>                                    ~ [^\s\S] # Matches nothing
+<IDENTIFIER EQUAL TO assembly OR module>     ~ [^\s\S] # Matches nothing
+<IDENTIFIER NOT EQUAL TO assembly OR module> ~ [^\s\S] # Matches nothing
+<keyword>                                  ::= <KEYWORD>
+<KEYWORD>                                    ~ [^\s\S] # Matches nothing
+<input characters>                         ::= <INPUT CHARACTERS>
+<INPUT CHARACTERS>                           ~ [^\s\S] # Matches nothing
+<delimited comment text>                   ::= <DELIMITED COMMENT TEXT>
+<DELIMITED COMMENT TEXT>                     ~ [^\s\S] # Matches nothing
