@@ -194,7 +194,8 @@ sub new {
              _line => 1,                              # Current line without respect of #line directives
              line_directive_filename => undef,        # file name in #line directive, but before the end of #line directive
              line_directive_line => undef,            # line number in #line directive, but before the end of #line directive
-             filename => undef,                       # Current file name with respect of #line directives            
+             filename => undef,                       # Current file name with respect of #line directives
+             last_token_type => undef,                # Last token type
              token_value => {
                  filename => undef,                   # filename as per #line directive
                  line_hidden => undef,                # Token line information is hidden (for debuggers)
@@ -207,7 +208,8 @@ sub new {
                  offset => undef,                     # Token start offset in bytes v.s. input data
                  bytes_length => undef,               # Token byte length
                  length => undef,                     # Token character length
-                 string => undef                      # Token content
+                 string => undef,                     # Token content
+                 type => undef                        # Token type
              }
          },
          $pkg)
@@ -536,6 +538,27 @@ sub _lexicalEventManager {
         elsif ($event eq 'identifier_or_keyword$') {
             $eslifRecognizerInterface->hasCompletion(1)
         }
+        elsif ($event eq 'identifier$') {
+            $self->{last_token_type} = 'identifier'
+        }
+        elsif ($event eq 'keyword$') {
+            $self->{last_token_type} = 'keyword'
+        }
+        elsif ($event eq 'integer_literal$') {
+            $self->{last_token_type} = 'integer literal'
+        }
+        elsif ($event eq 'real_literal$') {
+            $self->{last_token_type} = 'real literal'
+        }
+        elsif ($event eq 'character_literal$') {
+            $self->{last_token_type} = 'character literal'
+        }
+        elsif ($event eq 'string_literal$') {
+            $self->{last_token_type} = 'string literal'
+        }
+        elsif ($event eq 'operator_or_punctuator$') {
+            $self->{last_token_type} = 'operator or punctuator'
+        }
         elsif ($event eq 'token$') {
             $self->{has_token} = 1 if ! $eslifRecognizerInterface->recurseLevel;
             #
@@ -550,6 +573,7 @@ sub _lexicalEventManager {
             $self->{token_value}->{string} = bytes::substr($eslifRecognizerInterface->data, $self->{token_value}->{offset}, $self->{token_value}->{bytes_length});
             utf8::decode($self->{token_value}->{string});
             $self->{token_value}->{length} = length($self->{token_value}->{string});
+            $self->{token_value}->{type} = $self->{last_token_type};
             $match = '';
             $value = $self->{token_value};
             $name = 'TOKEN MARKER';
@@ -811,6 +835,14 @@ event token$ = completed <token>
                                                    | <character literal>
                                                    | <string literal>
                                                    | <operator or punctuator>
+
+event identifier$ = completed <identifier>
+event keyword$ = completed <keyword>
+event integer_literal$ = completed <integer literal>
+event real_literal$ = completed <real literal>
+event character_literal$ = completed <character literal>
+event string_literal$ = completed <string literal>
+event operator_or_punctuator$ = completed <operator or punctuator>
 
 <unicode escape sequence>                        ::= '\\u' <hex digit> <hex digit> <hex digit> <hex digit>
                                                    | '\\U' <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit>
