@@ -539,41 +539,43 @@ sub _lexicalEventManager {
             $eslifRecognizerInterface->hasCompletion(1)
         }
         elsif ($event eq 'identifier$') {
-            $self->{last_token_type} = 'identifier'
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'identifier');
+            $match = '';
+            $value = $self->{token_value};
+            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'keyword$') {
-            $self->{last_token_type} = 'keyword'
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'keyword');
+            $match = '';
+            $value = $self->{token_value};
+            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'integer_literal$') {
-            $self->{last_token_type} = 'integer literal'
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'integer literal');
+            $match = '';
+            $value = $self->{token_value};
+            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'real_literal$') {
-            $self->{last_token_type} = 'real literal'
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'real literal');
+            $match = '';
+            $value = $self->{token_value};
+            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'character_literal$') {
-            $self->{last_token_type} = 'character literal'
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'character literal');
+            $match = '';
+            $value = $self->{token_value};
+            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'string_literal$') {
-            $self->{last_token_type} = 'string literal'
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'string literal');
+            $match = '';
+            $value = $self->{token_value};
+            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'operator_or_punctuator$') {
-            $self->{last_token_type} = 'operator or punctuator'
-        }
-        elsif ($event eq 'token$') {
-            $self->{has_token} = 1 if ! $eslifRecognizerInterface->recurseLevel;
-            #
-            # We inject a <TOKEN MARKER> that we will use for the ast
-            #
-            $self->{token_value}->{filename} = $self->{filename};
-            $self->{token_value}->{line_hidden} = $self->{line_hidden};
-            $self->{token_value}->{line_end} = $self->{line};
-            $self->{token_value}->{_line_end} = $self->{_line};
-            $self->{token_value}->{column_end} = $eslifRecognizer->column - 1;
-            ($self->{token_value}->{offset}, $self->{token_value}->{bytes_length}) = $eslifRecognizer->lastCompletedLocation('token');
-            $self->{token_value}->{string} = bytes::substr($eslifRecognizerInterface->data, $self->{token_value}->{offset}, $self->{token_value}->{bytes_length});
-            utf8::decode($self->{token_value}->{string});
-            $self->{token_value}->{length} = length($self->{token_value}->{string});
-            $self->{token_value}->{type} = $self->{last_token_type};
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'operator or punctuator');
             $match = '';
             $value = $self->{token_value};
             $name = 'TOKEN MARKER';
@@ -755,6 +757,28 @@ sub _lexicalEventManager {
     return $rc;
 }
 
+# ============================================================================
+# _setTokenValue
+# ============================================================================
+sub _setTokenValue {
+    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $tokenType) = @_;
+
+    $self->{has_token} = 1 if ! $eslifRecognizerInterface->recurseLevel;
+    #
+    # We inject a <TOKEN MARKER> that we will use for the ast
+    #
+    $self->{token_value}->{filename} = $self->{filename};
+    $self->{token_value}->{line_hidden} = $self->{line_hidden};
+    $self->{token_value}->{line_end} = $self->{line};
+    $self->{token_value}->{_line_end} = $self->{_line};
+    $self->{token_value}->{column_end} = $eslifRecognizer->column - 1;
+    ($self->{token_value}->{offset}, $self->{token_value}->{bytes_length}) = $eslifRecognizer->lastCompletedLocation('token');
+    $self->{token_value}->{string} = bytes::substr($eslifRecognizerInterface->data, $self->{token_value}->{offset}, $self->{token_value}->{bytes_length});
+    utf8::decode($self->{token_value}->{string});
+    $self->{token_value}->{length} = length($self->{token_value}->{string});
+    $self->{token_value}->{type} = $tokenType;
+}
+
 =head1 NOTES
 
 This module is a L<Log::Any> consumer.
@@ -801,7 +825,6 @@ __[ lexical grammar ]__
                                                    | (- <token> -) <TOKEN MARKER>
 :lexeme ::= <TOKEN MARKER> symbol-action => tokenMarkerAction
 event ^token = predicted <token>
-event token$ = completed <token>
 
 :lexeme ::= <NEW LINE> pause => after event => NEW_LINE$           # Increments current line number
 <new line>                                       ::= <NEW LINE>
