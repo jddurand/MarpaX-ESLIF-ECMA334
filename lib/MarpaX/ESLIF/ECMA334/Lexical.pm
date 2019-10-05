@@ -1114,28 +1114,34 @@ event ^pp_expression = predicted <pp expression>
 <pp elif sections opt>                           ::= <pp elif sections>
 <pp else section opt>                            ::=
 <pp else section opt>                            ::= <pp else section>
-<conditional section opt>                        ::=
-<conditional section opt>                        ::= <conditional section>
+#
+# Because we introduce the internal lexemes <CONDITIONAL SECTION OK> and <CONDITIONAL SECTION KO> in <conditional section>,
+# the later is never optional. Its content always contains <CONDITIONAL SECTION OK> or <CONDITIONAL SECTION KO>, and it is
+# what follows that is optional.
+#
 
 event pp_if_context[] = nulled <pp if context>
 <pp if context>                                  ::=
-<pp if section>                                  ::= <PP IF> <whitespace> <pp expression> <pp new line> (- <pp if context> -) <conditional section opt>
+<pp if section>                                  ::= <PP IF> <whitespace> <pp expression> <pp new line> (- <pp if context> -) <conditional section>
 
 <pp elif sections>                               ::= <pp elif section>+
 event pp_elif_context[] = nulled <pp elif context>
 <pp elif context>                                ::=
-<pp elif section>                                ::= <PP ELIF> <whitespace> <pp expression> <pp new line> (- <pp elif context> -) <conditional section opt>
+<pp elif section>                                ::= <PP ELIF> <whitespace> <pp expression> <pp new line> (- <pp elif context> -) <conditional section>
 
 event pp_else_context[] = nulled <pp else context>
 <pp else context>                                ::=
-<pp else section>                                ::= <PP ELSE> <pp new line> (- <pp else context> -) <conditional section opt>
+<pp else section>                                ::= <PP ELSE> <pp new line> (- <pp else context> -) <conditional section>
 
 event pp_endif_context[] = nulled <pp endif context>
 <pp endif context>                               ::=
 <pp endif>                                       ::= <PP ENDIF> (- <pp endif context> -) <pp new line>
 
-<conditional section>                            ::= (- <CONDITIONAL SECTION OK> -) <input section>
-                                                   | (- <CONDITIONAL SECTION KO> -) <skipped section>
+<conditional section>                            ::= (- <CONDITIONAL SECTION OK> -) <input section opt>
+                                                   | (- <CONDITIONAL SECTION KO> -) <skipped section opt>
+
+<skipped section opt>                            ::= <skipped section>
+<skipped section opt>                            ::=
 event :discard[off] = predicted <skipped section>
 <skipped section>                                ::= <skipped section part>+
 <skipped section part>                           ::= <skipped characters opt> <new line>

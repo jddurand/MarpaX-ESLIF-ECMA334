@@ -236,35 +236,31 @@ class Class1
     cl\u0061ss.st\u0061tic(true);
   }
 }
-__[012 ko / single character is below 0xFFFF ]__
-string X = '🍄';
-__[013 ko / single regular string literal character is below 0xFFFF ]__
-string X = "🍄";
-__[014 ok / string literals ]__
-string a = "Happy birthday, Joel";
-string b = @"Happy birthday, Joel"; // Happy birthday, Joel
-// Happy birthday, Joel
-string c = "hello \t world";
-string d = @"hello \t world"; // hello
-world
-// hello \t world
-string e = "Joe said \"Hello\" to me";
-string f = @"Joe said ""Hello"" to me"; // Joe said "Hello" to me
-// Joe said "Hello" to me
-string g = "\\\\server\\share\\file.txt"; // \\server\share\file.txt
-string h = @"\\server\share\file.txt";
-// \\server\share\file.txt
-string i = "one\r\ntwo\r\nthree";
-string j = @"one
-two
-three";
-__[015 ok / pp line and pragma mixed with tokens ]__
-#line 999
-#line 1 "text.cs"
-"String at line 1 in text.cs";
-#pragma
-"String at line 3 in text.cs";
-#pragma Pragma Text
-"String at line 5 in text.cs after #pragma";
-#line 1 "textagain.cs"
-"String again at line 1 in textagain.cs";
+__[012 ko / Missing #endif ]__
+class test
+{
+#if X
+}
+__[013 ko / Missing #endif ]__
+class test
+{
+#if X
+#elif Y
+}
+__[014 ko / Missing #endif ]__
+class test
+{
+#if X
+#elif Y
+#else
+}
+__[015 ok / Balanced #if/#endif ]__
+class test
+{
+#if X
+#elif Y
+  string Y = "";
+#else
+  string Z = "";
+#endif
+}
