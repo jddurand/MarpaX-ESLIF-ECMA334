@@ -1061,6 +1061,17 @@ __[ syntactic grammar ]__
 <delimited comment text opt>           ::= <delimited comment text>
 <delimited comment text opt>           ::=
 
+# ---------------------------
+# Copied from lexical grammar
+# ---------------------------
+<delimited comment text>               ::= <delimited comment section>+
+<delimited comment section>            ::= '/'
+                                         | <asterisks opt> <not slash or asterisk>
+<asterisks opt>                        ::=
+<asterisks opt>                        ::= <asterisks>
+<asterisks>                            ::= '*'+
+<not slash or asterisk>                ::= /[^\/*]/u # Any Unicode character except / or *
+
 # --------------------------------------
 # Lexemes (injected after lexical parse)
 # --------------------------------------
@@ -1074,5 +1085,3 @@ __[ syntactic grammar ]__
 <KEYWORD>                                    ~ [^\s\S] # Matches nothing
 <input characters>                         ::= <INPUT CHARACTERS>
 <INPUT CHARACTERS>                           ~ [^\s\S] # Matches nothing
-<delimited comment text>                   ::= <DELIMITED COMMENT TEXT>
-<DELIMITED COMMENT TEXT>                     ~ [^\s\S] # Matches nothing
