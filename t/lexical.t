@@ -9,11 +9,27 @@ use Test::More::UTF8;
 use Test::Trap;
 use Try::Tiny;
 
+use Log::Log4perl qw/:easy/;
+use Log::Any::Adapter;
+use Log::Any qw/$log/;
+
 binmode STDOUT, ":utf8";
 
 
 BEGIN {
- require_ok('MarpaX::ESLIF::ECMA334')
+    #
+    # Init log
+    #
+    our $defaultLog4perlConf = '
+log4perl.rootLogger              = INFO, Screen
+log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
+log4perl.appender.Screen.stderr  = 0
+log4perl.appender.Screen.layout  = PatternLayout
+log4perl.appender.Screen.layout.ConversionPattern = %d %-5p %6P %m{chomp}%n
+        ';
+    Log::Log4perl::init(\$defaultLog4perlConf);
+    Log::Any::Adapter->set('Log4perl');
+    require_ok('MarpaX::ESLIF::ECMA334')
 };
 
 my $lexicalParser = MarpaX::ESLIF::ECMA334::Lexical->new;
@@ -56,14 +72,14 @@ sub do_test {
             diag "  Error: " . $_->error if defined($_->error);
             diag "  File: " . $_->file if defined($_->file);
             diag "  Line: " . $_->line . " (pp compliant)" if defined($_->line);
-            diag "  Column: " . $_->column if defined($_->column);
             diag "  Line: " . $_->_line . " (raw)" if defined($_->_line);
+            diag "  Column: " . $_->column if defined($_->column);
             diag "  Expected: " . Dumper($_->expected) if defined($_->expected);
         } else {
             diag $_
         }
     } finally {
-        # diag Dumper($lexicalAst) if defined($lexicalAst)
+        diag Dumper($lexicalAst) if defined($lexicalAst)
     };
 
     ok($want_ok ? defined($lexicalAst) : !defined($lexicalAst), $name);
@@ -221,20 +237,8 @@ __[010 ok / pre-processing special case ]__
 /* */ class Q { }
 #endif
 __[011 ok / verbatim identifier ]__
-class @class
-{
-  public static void @static(bool @bool) {
-    if (@bool)
-      System.Console.WriteLine("true");
-    else
-      System.Console.WriteLine("false");
-  }
-}
-class Class1
-{
-  static void M() {
-    cl\u0061ss.st\u0061tic(true);
-  }
+class Class1 {
+  cl\u0061ss.st\u0061tic(true);
 }
 __[012 ko / Missing #endif ]__
 class test
@@ -263,4 +267,25 @@ class test
 #else
   string Z = "";
 #endif
+}
+__[016 ko / #error empty message ]__
+class test
+{
+#error
+}
+__[017 ko / #error not empty message ]__
+class test
+{
+#error "PP Error Message"
+}
+__[018 ok / #warning empty message ]__
+class test
+{
+#warning
+}
+__[019 ok / #warning not empty message ]__
+class test
+{
+#warning "PP Warning Message"
+/* This is a comment */
 }

@@ -26,7 +26,8 @@ This module parses lexically the C# language as per Standard ECMA-334 5th Editio
 use Data::Section -setup;
 use MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface;
 use MarpaX::ESLIF::ECMA334::Lexical::ValueInterface;
-use MarpaX::ESLIF 3.0.15; # if-action
+use MarpaX::ESLIF 3.0.19; # if-action, discardLast()
+use Log::Any qw/$log/;
 
 my $PRE_LEXICAL_BNF           = ${__PACKAGE__->section_data('pre lexical grammar')};
 my $LEXICAL_BNF               = ${__PACKAGE__->section_data('lexical grammar')};
@@ -43,7 +44,6 @@ my $PP_EXPRESSION_GRAMMAR         = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->n
 my %USERFRIENDLYLEXEMES = (
     'LINE INDICATOR DEFAULT'                           => 'default',
     'LINE INDICATOR HIDDEN'                            => 'hidden',
-    # 'TOKEN MARKER'                                     => /[^\s\S]/ # Matches nothing
     # <NEW LINE>                                         => /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
     # <SINGLE CHARACTER>                                 => /[^\x{0027}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0027 005C AND NEW LINE CHARACTER>
     # <SINGLE REGULAR STRING LITERAL CHARACTER>          => /[^\x{0022}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0022 005C AND NEW LINE CHARACTER>
@@ -162,6 +162,12 @@ use Exception::Class (
         isa         => 'MarpaX::ESLIF::ECMA334::Lexical::Exception',
         description => 'Internal error',
         alias       => 'throw_internal_exception'
+    },
+
+    'MarpaX::ESLIF::ECMA334::Lexical::Exception::PP::Error' => {
+        isa         => 'MarpaX::ESLIF::ECMA334::Lexical::Exception',
+        description => 'Pre-processing error',
+        alias       => 'throw_pp_exception'
     }
 );
 
@@ -196,21 +202,15 @@ sub new {
              line_directive_line => undef,            # line number in #line directive, but before the end of #line directive
              filename => undef,                       # Current file name with respect of #line directives
              last_token_type => undef,                # Last token type
-             token_value => {
-                 filename => undef,                   # filename as per #line directive
-                 line_hidden => undef,                # Token line information is hidden (for debuggers)
-                 line_start => undef,                 # Token start line with respect of #line directives
-                 _line_start => undef,                # Token start line without respect of #line directives
-                 line_end => undef,                   # Token end line with respect of #line directives
-                 _line_end => undef,                  # Token end line without respect of #line directives
-                 column_start => undef,               # Token start column
-                 column_end => undef,                 # Token end column
-                 offset => undef,                     # Token start offset in bytes v.s. input data
-                 bytes_length => undef,               # Token byte length
-                 length => undef,                     # Token character length
-                 string => undef,                     # Token content
-                 type => undef                        # Token type
-             }
+             last_token_line_start => undef,          # Last token line start
+             last_token__line_start => undef,         # Last token _line start
+             last_token_column_start => undef,        # Last token column start
+             last_pp_message => undef,                # Last <pp message>
+             token_value_last_line_start => undef,    # Last token line start pp compliant
+             token_value_last__line_start => undef,   # Last token line start from source
+             token_value_last_column_start => undef,  # Last token column start
+             comments => [],                          # Comments are transveral in the grammar: we will reinject them in order in the final AST
+             lexical_ast => []                        # Flattened list of tokens, comments and #pragma messages
          },
          $pkg)
 }
@@ -292,7 +292,6 @@ sub _parse {
     # Instanciate recognizer and value interfaces
     # -------------------------------------------
     my $eslifRecognizerInterface = $eslifRecognizerInterfaceClass->new(%options);
-    my $eslifValueInterface = $eslifValueInterfaceClass->new(%options);
 
     # ------------------------
     # Instanciate a recognizer
@@ -310,6 +309,7 @@ sub _parse {
     if (! defined($eslifRecognizer->input)) {
         $eslifRecognizer->read || $self->_exception($eslifRecognizer, 'Initial read failed')
     }
+    my $initialLength = bytes::length($eslifRecognizer->input);
 
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
@@ -347,12 +347,19 @@ sub _parse {
     # -----------------------------------------------------------------------------------------
     # Call for valuation (we configured value interface to not accept ambiguity nor null parse)
     # -----------------------------------------------------------------------------------------
+    my $eslifValueInterface = $eslifValueInterfaceClass->new(%options, lexical_ast => $self->{lexical_ast});
+
     $self->_exception(undef, 'Valuation failure') unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
 
-    # ------------------------
-    # Return the value
-    # ------------------------
-    return $eslifValueInterface->getResult
+    # -------------------------------
+    # Return the length and the value
+    # -------------------------------
+    my $finalLength = bytes::length($eslifRecognizer->input) // 0;
+    my $length = $initialLength - $finalLength;
+    my $match = bytes::substr($eslifRecognizerInterface->data, 0, $length);
+    my $value = $eslifValueInterface->getResult;
+
+    return ($eslifValueInterface->getResult, $match)
 }
 
 # ============================================================================
@@ -430,7 +437,7 @@ sub _keyword {
 sub _exception {
     my $self = shift;
 
-    $self->_error(0, @_) # Not an internal error
+    $self->_error(\&throw_exception, @_)
 }
 
 # ============================================================================
@@ -439,14 +446,23 @@ sub _exception {
 sub _internal_exception {
     my $self = shift;
 
-    $self->_error(1, @_) # Is an internal error
+    $self->_error(\&throw_internal_exception, @_)
+}
+
+# ============================================================================
+# _pp_exception
+# ============================================================================
+sub _pp_exception {
+    my $self = shift;
+
+    $self->_error(\&throw_pp_exception, @_)
 }
 
 # ============================================================================
 # _error
 # ============================================================================
 sub _error {
-    my ($self, $isInternal, $eslifRecognizer, $fmt, @args) = @_;
+    my ($self, $exceptionCallback, $eslifRecognizer, $fmt, @args) = @_;
 
     my ($_line, $column, $expected);
 
@@ -470,19 +486,17 @@ sub _error {
         $expected = \@expected;
     }
 
+    my $error = @args ? ($fmt ? sprintf($fmt, @args) : '') : ($fmt // '');
     my @exception_args = (
-        error => sprintf($fmt, @args),
+        error => $error,
         file => $self->{filename},
         line => $self->{line},
         _line => $_line,
         column => $column,
         expected => $expected
         );
-    if ($isInternal) {
-        throw_internal_exception @exception_args
-    } else {
-        throw_exception @exception_args
-    }
+
+    $exceptionCallback->(@exception_args);
 }
 
 # ============================================================================
@@ -504,30 +518,50 @@ sub _lexicalEventManager {
     my @alternatives;
     my $latm = -1;
 
-    #
-    # Always process pp_line$ and NEW_LINE$ before any event
-    #
     my $have_pp_line_completion = grep {$_ eq 'pp_line$'} @events;
     my $have_NEW_LINE_completion = grep {$_ eq 'NEW_LINE$'} @events;
-    if ($have_pp_line_completion) {
-        #
-        # Commit <pp line> indicator
-        #
-        $self->{filename} = $self->{line_directive_filename};
-        if ($self->{line_directive_line} eq 'default') {
-            $self->{line_hidden} = 0;
-        } elsif ($self->{line_directive_line} eq 'hidden') {
-            $self->{line_hidden} = 1;
-        } else {
-            $self->{line} = $self->{line_directive_line};
+    my $have_diagnostics = grep {$_ eq 'trigger_pp_error[]' || $_ eq 'trigger_pp_warning[]' } @events;
+    my $have_last_pp_message_empty = grep {$_ eq 'last_pp_message_empty[]' } @events;
+    my $have_last_pp_message_not_empty = grep {$_ eq 'last_pp_message_not_empty[]' } @events;
+
+    #
+    # Always process last_pp_message_empty[] and last_pp_message_not_empty[] before any event
+    #
+    if ($have_last_pp_message_empty) {
+        $self->{last_pp_message} = '';
+    } elsif ($have_last_pp_message_not_empty) {
+        my ($offset, $bytes_length) = $eslifRecognizer->lastCompletedLocation('input characters');
+        my $input_characters = bytes::substr($eslifRecognizerInterface->data, $offset, $bytes_length);
+        utf8::decode($input_characters);
+        $self->{last_pp_message} = $input_characters;
+    }
+    #
+    # Always process pp_line$ and NEW_LINE$ before any event,
+    # unless there is an #error or #warning event
+    #
+    if (! $have_diagnostics) {
+        if ($have_pp_line_completion) {
+            #
+            # Commit <pp line> indicator
+            #
+            $self->{filename} = $self->{line_directive_filename};
+            if ($self->{line_directive_line} eq 'default') {
+                $self->{line_hidden} = 0;
+            } elsif ($self->{line_directive_line} eq 'hidden') {
+                $self->{line_hidden} = 1;
+            } else {
+                $self->{line} = $self->{line_directive_line};
+            }
+        } elsif ($have_NEW_LINE_completion) {
+            $self->{line}++;
+            $self->{_line}++;
         }
-    } elsif ($have_NEW_LINE_completion) {
-        $self->{line}++;
-        $self->{_line}++;
     }
 
+    print STDERR "==> Events: @events\n";
     foreach my $event (@events) {
-        my ($identifier_or_keyword, $keyword, $match, $name, $value, $pp_expression) = (undef, undef, undef, undef, undef, undef);
+        my ($identifier_or_keyword, $identifier_or_keyword_match, $keyword, $keyword_match, $match, $name, $value, $length, $pp_expression) = (undef, undef, undef, undef, undef, undef, undef, undef, undef);
+        my ($identifier_or_keyword_done, $keyword_done) = (0, 0);
 
         if ($event eq "'exhausted'") {
             $eslifRecognizerInterface->hasCompletion(1)
@@ -540,45 +574,24 @@ sub _lexicalEventManager {
         }
         elsif ($event eq 'identifier$') {
             $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'identifier');
-            $match = '';
-            $value = $self->{token_value};
-            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'keyword$') {
             $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'keyword');
-            $match = '';
-            $value = $self->{token_value};
-            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'integer_literal$') {
             $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'integer literal');
-            $match = '';
-            $value = $self->{token_value};
-            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'real_literal$') {
             $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'real literal');
-            $match = '';
-            $value = $self->{token_value};
-            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'character_literal$') {
             $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'character literal');
-            $match = '';
-            $value = $self->{token_value};
-            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'string_literal$') {
             $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'string literal');
-            $match = '';
-            $value = $self->{token_value};
-            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'operator_or_punctuator$') {
             $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'operator or punctuator');
-            $match = '';
-            $value = $self->{token_value};
-            $name = 'TOKEN MARKER';
         }
         elsif ($event eq 'pp_declaration_define$') {
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::true
@@ -623,6 +636,19 @@ sub _lexicalEventManager {
             #
             # No-op - processed before everything in any case
             #
+        }
+        elsif ($event eq 'comment$') {
+            $self->_setCommentValue($eslifRecognizerInterface, $eslifRecognizer, 'comment');
+        }
+        elsif ($event eq "last_pp_message_empty[]") {
+        }
+        elsif ($event eq "last_pp_message_not_empty[]") {
+        }
+        elsif ($event eq "trigger_pp_error[]") {
+            $self->_pp_exception(undef, $self->{last_pp_message});
+        }
+        elsif ($event eq "trigger_pp_warning[]") {
+            $log->warning($self->{last_pp_message});
         }
         elsif ($event eq "pp_if_context[]") {
             if ($self->{last_pp_expression}) {
@@ -672,42 +698,57 @@ sub _lexicalEventManager {
             pop(@{$self->{can_next_conditional_section}})
         }
         elsif ($event eq '^available_identifier') {
-            $identifier_or_keyword //= $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
+            if (! $identifier_or_keyword_done) {
+                ($identifier_or_keyword, $identifier_or_keyword_match) = $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                $identifier_or_keyword_done = 1;
+            }
             if (defined($identifier_or_keyword)) {
-                $keyword //= $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                if (! $keyword_done) {
+                    ($keyword, $keyword_match) = $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                    $keyword_done = 1;
+                }
                 if (! defined($keyword)) {
-                    $match = $identifier_or_keyword;
+                    $match = $identifier_or_keyword_match;
                     $value = $identifier_or_keyword;
                     $name = 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD'
                 }
             }
         }
         elsif ($event eq '^token') {
-            $self->{token_value}->{line_start} = $self->{line};
-            $self->{token_value}->{_line_start} = $self->{_line};
-            $self->{token_value}->{column_start} = $eslifRecognizer->column;
+            $self->{token_value_last_line_start} = $self->{line};
+            $self->{token_value_last__line_start} = $self->{_line};
+            $self->{token_value_last_column_start} = $eslifRecognizer->column;
         }
         elsif ($event eq '^keyword') {
-            $keyword //= $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
+            if (! $keyword_done) {
+                ($keyword, $keyword_match) = $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                $keyword_done = 1;
+            }
             if (defined($keyword)) {
-                $match = $keyword;
+                $match = $keyword_match;
                 $value = $keyword;
                 $name = 'KEYWORD'
             }
         }
         elsif ($event eq '^identifier_or_keyword') {
-            $identifier_or_keyword //= $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
+            if (! $identifier_or_keyword_done) {
+                ($identifier_or_keyword, $identifier_or_keyword_match) = $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                $identifier_or_keyword_done = 1;
+            }
             if (defined($identifier_or_keyword)) {
-                $match = $identifier_or_keyword;
+                $match = $identifier_or_keyword_match;
                 $value = $identifier_or_keyword;
                 $name = 'IDENTIFIER OR KEYWORD'
             }
         }
         elsif ($event eq '^conditional_symbol') {
-            $identifier_or_keyword //= $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
+            if (! $identifier_or_keyword_done) {
+                ($identifier_or_keyword, $identifier_or_keyword_match) = $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                $identifier_or_keyword_done = 1;
+            }
             if (defined($identifier_or_keyword)) {
                 if ($identifier_or_keyword ne 'true' && $identifier_or_keyword ne 'false') {
-                    $match = $identifier_or_keyword;
+                    $match = $identifier_or_keyword_match;
                     $value = $identifier_or_keyword;
                     $name = 'ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE';
                     $self->{last_conditional_symbol} = $match
@@ -746,8 +787,32 @@ sub _lexicalEventManager {
         }
     }
 
+    #
+    # Always process pp_line$ and NEW_LINE$ after any event,
+    # if there is an #error or #warning event
+    #
+    if ($have_diagnostics) {
+        if ($have_pp_line_completion) {
+            #
+            # Commit <pp line> indicator
+            #
+            $self->{filename} = $self->{line_directive_filename};
+            if ($self->{line_directive_line} eq 'default') {
+                $self->{line_hidden} = 0;
+            } elsif ($self->{line_directive_line} eq 'hidden') {
+                $self->{line_hidden} = 1;
+            } else {
+                $self->{line} = $self->{line_directive_line};
+            }
+        } elsif ($have_NEW_LINE_completion) {
+            $self->{line}++;
+            $self->{_line}++;
+        }
+    }
+
     if ($latm >= 0) {
         map {
+            print STDERR "==> Alternative name=" . ($_->{name} // 'undef') . ", value=" . ($_->{value} // 'undef') . "\n";
             $self->_internal_exception($eslifRecognizer, '%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
         } @alternatives;
         $self->_internal_exception($eslifRecognizer, 'lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
@@ -761,22 +826,66 @@ sub _lexicalEventManager {
 # _setTokenValue
 # ============================================================================
 sub _setTokenValue {
-    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $tokenType) = @_;
-
+    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $type) = @_;
+    #
+    # This boolean is used in #define and #undef events
+    #
     $self->{has_token} = 1 if ! $eslifRecognizerInterface->recurseLevel;
     #
-    # We inject a <TOKEN MARKER> that we will use for the ast
+    # Push a value for the AST
     #
-    $self->{token_value}->{filename} = $self->{filename};
-    $self->{token_value}->{line_hidden} = $self->{line_hidden};
-    $self->{token_value}->{line_end} = $self->{line};
-    $self->{token_value}->{_line_end} = $self->{_line};
-    $self->{token_value}->{column_end} = $eslifRecognizer->column - 1;
-    ($self->{token_value}->{offset}, $self->{token_value}->{bytes_length}) = $eslifRecognizer->lastCompletedLocation('token');
-    $self->{token_value}->{string} = bytes::substr($eslifRecognizerInterface->data, $self->{token_value}->{offset}, $self->{token_value}->{bytes_length});
-    utf8::decode($self->{token_value}->{string});
-    $self->{token_value}->{length} = length($self->{token_value}->{string});
-    $self->{token_value}->{type} = $tokenType;
+    $self->_setAstValue($eslifRecognizerInterface, $eslifRecognizer, 'token_value', 'token', $type);
+    #
+    # We know what values we inject, and made sure the corresponding events are injecting the correct values
+    # for last line, _line and column start
+    #
+    my $lastAstValue = $self->{lexical_ast}->[-1];
+    $lastAstValue->{line_start} = $self->{token_value_last_line_start};
+    $lastAstValue->{_line_start} = $self->{token_value_last__line_start};
+    $lastAstValue->{column_start} = $self->{token_value_last_column_start};
+}
+
+# ============================================================================
+# _setCommentValue
+# ============================================================================
+sub _setCommentValue {
+    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $type) = @_;
+    #
+    # Push a value for the AST
+    #
+    $self->_setAstValue($eslifRecognizerInterface, $eslifRecognizer, 'comment_value', ':discard', 'comment');
+}
+
+# ============================================================================
+# _setAstValue
+# ============================================================================
+sub _setAstValue {
+    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $what, $nameInGrammar, $type) = @_;
+
+    my $astValue = $self->{$what} // {};
+    $astValue->{filename} = $self->{filename};
+    $astValue->{line_hidden} = $self->{line_hidden};
+    $astValue->{line_end} = $self->{line};
+    $astValue->{_line_end} = $self->{_line};
+    $astValue->{column_end} = $eslifRecognizer->column - 1;
+    if ($nameInGrammar eq ':discard') {
+        #
+        # Special case for :discard
+        #
+        my $discard = $eslifRecognizer->discardLast();
+        my $discardBytesLength = bytes::length($discard);
+        $astValue->{offset} -= $discardBytesLength;
+        $astValue->{bytes_length} -= $discardBytesLength;
+        $astValue->{string} = $discard;
+    } else {
+        ($astValue->{offset}, $astValue->{bytes_length}) = $eslifRecognizer->lastCompletedLocation($nameInGrammar);
+        $astValue->{string} = bytes::substr($eslifRecognizerInterface->data, $astValue->{offset}, $astValue->{bytes_length});
+        utf8::decode($astValue->{string});
+    }
+    $astValue->{length} = length($astValue->{string});
+    $astValue->{type} = $type;
+
+    push(@{$self->{lexical_ast}}, $astValue);
 }
 
 =head1 NOTES
@@ -803,7 +912,7 @@ __[ lexical grammar ]__
 # ############################################################################################################
 :default                                         ::= action => ::convert[UTF-8] symbol-action => ::convert[UTF-8]
 :desc                                            ::= 'Lexical grammar'
-:discard                                         ::= <comment>
+:discard                                         ::= <comment> event => comment$
 
 #
 # Note that the spec does NOT say if file-name characters disable comments. We assume they do so.
@@ -822,9 +931,7 @@ __[ lexical grammar ]__
 <input elements opt>                             ::= <input elements>
 <input elements>                                 ::= <input element>+
 <input element>                                  ::= <whitespace>
-                                                   | (- <token> -) <TOKEN MARKER>
-:lexeme ::= <TOKEN MARKER> symbol-action => tokenMarkerAction
-event ^token = predicted <token>
+                                                   | (- <token> -)
 
 :lexeme ::= <NEW LINE> pause => after event => NEW_LINE$           # Increments current line number
 <new line>                                       ::= <NEW LINE>
@@ -1057,7 +1164,7 @@ event ^keyword = predicted <keyword>
 # => For #endregion this is <pp message> instead, which I believe is an error. For #endregion <pp message>
 #    is changed to <pp endregion message> that uses <pp new line> instead of <new line>
 # => :discard is switched off when a pp keyword is found (#if, #endif, etc...)
-# => :discard is switch on at the end of <pp new line>
+# => :discard is switch on at the end of <pp new line> and <pp message> (because <pp diagnostic> ends with <new line> instead of <pp new line>)
 # => :discard is switch off explicitly again if we enter a skipped section
 
 #
@@ -1082,6 +1189,7 @@ event ^keyword = predicted <keyword>
 # Whatever happened, discard is always switched on at the end of <pp new line>
 #
 event :discard[on] = completed <pp new line>
+event :discard[on] = completed <pp diagnostic>
 
 <pp directive>                                   ::= <pp declaration>
                                                    | <pp conditional>
@@ -1151,10 +1259,20 @@ event :discard[off] = predicted <skipped section>
 <skipped characters>                             ::= <whitespace opt> <not number sign> <input characters opt>
 <not number sign>                                ::= /[^#]/u # Any input-character except #
 
-<pp diagnostic>                                  ::= <PP ERROR> <pp message>
-                                                   | <PP WARNING> <pp message>
-<pp message>                                     ::= <new line>
-                                                   | <whitespace> <input characters opt> <new line>
+<pp diagnostic>                                  ::= <PP ERROR> <pp message>   <trigger pp error>
+                                                   | <PP WARNING> <pp message> <trigger pp warning>
+<pp message>                                     ::=                                 <new line> <last pp message empty>
+                                                   | <whitespace>                    <new line> <last pp message empty>
+                                                   | <whitespace> <input characters> <new line> <last pp message not empty>
+
+event last_pp_message_empty[] = nulled <last pp message empty>
+event last_pp_message_not_empty[] = nulled <last pp message not empty>
+<last pp message empty>                          ::=
+<last pp message not empty>                      ::=
+event trigger_pp_error[] = nulled <trigger pp error>
+event trigger_pp_warning[] = nulled <trigger pp warning>
+<trigger pp error>                               ::=
+<trigger pp warning>                             ::=
 
 # The lexical processing of a region:
 # #region
@@ -1200,15 +1318,15 @@ event ^pp_line_indicator = predicted <line indicator>
 <file name character>                            ::= /[^\x{0022}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY INPUT CHARACTER EXCEPT 0022 AND NEW LINE CHARACTER>
 
 <pp pragma>                                      ::= <PP PRAGMA> <pp pragma text>
-<pp pragma text>                                 ::= (- <new line> -)                                           action => ppPragmaTextAction
-                                                   | (- <whitespace> -) <input characters opt> (- <new line> -) action => ppPragmaTextAction
+<pp pragma text>                                 ::= (- <new line> -)
+                                                   | (- <whitespace> -) <input characters>     (- <new line> -) # Only #pragma's text with a not-nullable text are of interest
+                                                   | (- <whitespace> -)
 
 #
 # Lexemes
 #
 <LINE INDICATOR DEFAULT>                           ~ 'default'
 <LINE INDICATOR HIDDEN>                            ~ 'hidden'
-<TOKEN MARKER>                                     ~ /[^\s\S]/ # Matches nothing
 <NEW LINE>                                         ~ /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
 <SINGLE CHARACTER>                                 ~ /[^\x{0027}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0027 005C AND NEW LINE CHARACTER>
 <SINGLE REGULAR STRING LITERAL CHARACTER>          ~ /[^\x{0022}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0022 005C AND NEW LINE CHARACTER>
@@ -1247,7 +1365,7 @@ event identifier_or_keyword$ = completed <identifier or keyword>
 <identifier start character>                     ::= <letter character>
                                                    | <underscore character>
 <underscore character>                           ::= '_' # The underscore character U+005F
-                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F>
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING THE CHARACTER 005F> action => ::u8"_"
 <identifier part characters>                     ::= <identifier part character>+
 <identifier part character>                      ::= <letter character>
                                                    | <decimal digit character>
@@ -1255,15 +1373,15 @@ event identifier_or_keyword$ = completed <identifier or keyword>
                                                    | <combining character>
                                                    | <formatting character>
 <letter character>                               ::= /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/u
-                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Lu Ll Lt Lm Lo or Nl>
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Lu Ll Lt Lm Lo or Nl> action => unicode_unescape_sequence
 <combining character>                            ::= /[\p{Mn}\p{Mc}]/u
-                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Mn or Mc>
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Mn or Mc>             action => unicode_unescape_sequence
 <decimal digit character>                        ::= /[\p{Nd}]/u
-                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Nd>
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Nd>                   action => unicode_unescape_sequence
 <connecting character>                           ::= /[\p{Pc}]/u
-                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Pc>
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Pc>                   action => unicode_unescape_sequence
 <formatting character>                           ::= /[\p{Cf}]/u
-                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Cf>
+                                                   | <A UNICODE ESCAPE SEQUENCE REPRESENTING A CHARACTER OF CLASSES Cf>                   action => unicode_unescape_sequence
 
 <UNICODE ESCAPE SEQUENCE>                     :[2]:= /\\u[0-9A-Fa-f]{4}/
                                                    | /\\U[0-9A-Fa-f]{8}/

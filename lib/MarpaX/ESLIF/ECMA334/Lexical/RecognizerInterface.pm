@@ -244,6 +244,20 @@ sub hasCompletion {
 }
 
 # ============================================================================
+# unicode_unescape_sequence
+# ============================================================================
+
+=head3 unicode_unescape_sequence($self, $lexeme)
+
+Returns the unescaped unicode character corresponding to C<$lexeme>
+
+=cut
+
+sub unicode_unescape_sequence {
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_unescape_sequence($_[1])
+}
+
+# ============================================================================
 # A_unicode_escape_sequence_representing_the_character_005f
 # ============================================================================
 
@@ -254,7 +268,7 @@ Returns a true or a false value, indicating if C<$lexeme> represents the charact
 =cut
 
 sub A_unicode_escape_sequence_representing_the_character_005f {
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_escape_sequence($_[1]) eq "\x{005F}"
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_unescape_sequence($_[1]) eq "\x{005F}"
 }
 
 # ============================================================================
@@ -268,7 +282,7 @@ Returns a true or a false value, indicating if C<$lexeme> represent a character 
 =cut
 
 sub A_unicode_escape_sequence_representing_a_character_of_classes_Lu_Ll_Lt_Lm_Lo_or_Nl {
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_escape_sequence($_[1]) =~ /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_unescape_sequence($_[1]) =~ /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}]/
 }
 
 # ============================================================================
@@ -282,7 +296,7 @@ Returns a true or a false value, indicating if C<$lexeme> represent a character 
 =cut
 
 sub A_unicode_escape_sequence_representing_a_character_of_classes_Mn_or_Mc {
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_escape_sequence($_[1]) =~ /[\p{Mn}\p{Mc}]/
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_unescape_sequence($_[1]) =~ /[\p{Mn}\p{Mc}]/
 }
 
 # ============================================================================
@@ -296,7 +310,7 @@ Returns a true or a false value, indicating if C<$lexeme> represent a character 
 =cut
 
 sub A_unicode_escape_sequence_representing_a_character_of_the_class_Nd {
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_escape_sequence($_[1]) =~ /\p{Nd}/
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_unescape_sequence($_[1]) =~ /\p{Nd}/
 }
 
 # ============================================================================
@@ -310,7 +324,7 @@ Returns a true or a false value, indicating if C<$lexeme> represent a character 
 =cut
 
 sub A_unicode_escape_sequence_representing_a_character_of_the_class_Pc {
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_escape_sequence($_[1]) =~ /\p{Pc}/
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_unescape_sequence($_[1]) =~ /\p{Pc}/
 }
 
 # ============================================================================
@@ -324,7 +338,7 @@ Returns a true or a false value, indicating if C<$lexeme> represent a character 
 =cut
 
 sub A_unicode_escape_sequence_representing_a_character_of_the_class_Cf {
-    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_escape_sequence($_[1]) =~ /\p{Cf}/
+    return MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper::unicode_unescape_sequence($_[1]) =~ /\p{Cf}/
 }
 
 # ============================================================================

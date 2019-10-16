@@ -18,7 +18,7 @@ MarpaX::ESLIF::ECMA334's Lexical Unicode Helper
 
     use MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper;
 
-    my $unescaped_character = MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_escape_sequence('\\u0061');
+    my $unescaped_character = MarpaX::ESLIF::ECMA334::Lexical::UnicodeHelper->unicode_unescape_sequence('\\u0061');
 
 =cut
 
@@ -28,16 +28,16 @@ MarpaX::ESLIF::ECMA334's Lexical Unicode Helper
 =cut
 
 # ============================================================================
-# unicode_escape_sequence
+# unicode_unescape_sequence
 # ============================================================================
 
-=head2 unicode_escape_sequence($utf8bytes)
+=head2 unicode_unescape_sequence($utf8bytes)
 
 Returns unescaped character corresponding to a C<\\uxxxx> or C<\\Uxxxxxxxx> escaped sequence.
 
 =cut
 
-sub unicode_escape_sequence {
+sub unicode_unescape_sequence {
     my ($utf8bytes) = @_;
 
     return substr($utf8bytes, 0, 2, '') eq '\\u' ? _u4(split(//, $utf8bytes)) : _u8(split(//, $utf8bytes))
