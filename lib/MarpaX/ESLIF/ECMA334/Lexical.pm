@@ -322,7 +322,7 @@ sub _parse {
                 # ------------------------------------------------------------
                 # Event loop can do a lexeme complete that triggers new events
                 # ------------------------------------------------------------
-                while ($self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)) {
+                while ($self->$eventManager($eslifGrammar, $eslifRecognizer, $eslifRecognizerInterface)) {
                 }
                 if (! $eslifRecognizer->resume) {
                     #
@@ -506,7 +506,7 @@ sub _error {
 # The event manager must always return a true value if it has performed a lexeme complete
 #
 sub _lexicalEventManager {
-    my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
+    my ($self, $eslifGrammar, $eslifRecognizer, $eslifRecognizerInterface) = @_;
 
     my $rc = 0;
 
@@ -558,7 +558,7 @@ sub _lexicalEventManager {
         }
     }
 
-    print STDERR "==> Events: @events\n";
+    $log->tracef("[%d] %s: Events: %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, \@events);
     foreach my $event (@events) {
         my ($identifier_or_keyword, $identifier_or_keyword_match, $keyword, $keyword_match, $match, $name, $value, $length, $pp_expression) = (undef, undef, undef, undef, undef, undef, undef, undef, undef);
         my ($identifier_or_keyword_done, $keyword_done) = (0, 0);
@@ -822,7 +822,7 @@ sub _lexicalEventManager {
 
     if ($latm >= 0) {
         map {
-            print STDERR "==> Alternative name=" . ($_->{name} // 'undef') . ", value=" . ($_->{value} // 'undef') . "\n";
+            $log->tracef("[%d] %s: Alternative: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $_->{name}, $_->{value});
             $self->_internal_exception($eslifRecognizer, '%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
         } @alternatives;
         $self->_internal_exception($eslifRecognizer, 'lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
@@ -1501,7 +1501,7 @@ __[ pp expression grammar ]__
 # ############################################################################################################
 # Pp Expression Grammar
 # ############################################################################################################
-:desc                                            ::= 'Pre-processing expression'
+:desc                                            ::= 'Pre-processing expression grammar'
 :default                                         ::= action => ::shift
 :start                                           ::= <pp expression>
 
