@@ -559,9 +559,9 @@ sub _lexicalEventManager {
     }
 
     $log->tracef("[%d] %s: Events: %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, \@events);
+    my ($identifier_or_keyword_done, $keyword_done) = (0, 0);
     foreach my $event (@events) {
         my ($identifier_or_keyword, $identifier_or_keyword_match, $keyword, $keyword_match, $match, $name, $value, $length, $pp_expression) = (undef, undef, undef, undef, undef, undef, undef, undef, undef);
-        my ($identifier_or_keyword_done, $keyword_done) = (0, 0);
 
         if ($event eq "'exhausted'") {
             $eslifRecognizerInterface->hasCompletion(1)
