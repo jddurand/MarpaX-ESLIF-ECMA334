@@ -520,7 +520,7 @@ sub _lexicalEventManager {
 
     my $have_pp_line_completion = grep {$_ eq 'pp_line$'} @events;
     my $have_NEW_LINE_completion = grep {$_ eq 'NEW_LINE$'} @events;
-    my $have_diagnostics = grep {$_ eq 'trigger_pp_error[]' || $_ eq 'trigger_pp_warning[]' } @events;
+    my $have_diagnostics = grep {$_ eq '^trigger_pp_error' || $_ eq '^trigger_pp_warning' } @events;
     my $have_last_pp_message_empty = grep {$_ eq 'last_pp_message_empty[]' } @events;
     my $have_last_pp_message_not_empty = grep {$_ eq 'last_pp_message_not_empty[]' } @events;
 
@@ -644,11 +644,21 @@ sub _lexicalEventManager {
         }
         elsif ($event eq "last_pp_message_not_empty[]") {
         }
-        elsif ($event eq "trigger_pp_error[]") {
+        elsif ($event eq "^trigger_pp_error") {
             $self->_pp_exception(undef, $self->{last_pp_message});
+            #
+            # Also coded for coherence, the following <TRIGGER PP ERROR> will not be inject
+            # because an exception has been raised
+            #
+            $match = '';
+            $value = undef;
+            $name = 'TRIGGER PP ERROR';
         }
-        elsif ($event eq "trigger_pp_warning[]") {
+        elsif ($event eq "^trigger_pp_warning") {
             $log->warning($self->{last_pp_message});
+            $match = '';
+            $value = undef;
+            $name = 'TRIGGER PP WARNING';
         }
         elsif ($event eq "pp_if_context[]") {
             if ($self->{last_pp_expression}) {
@@ -1269,10 +1279,10 @@ event last_pp_message_empty[] = nulled <last pp message empty>
 event last_pp_message_not_empty[] = nulled <last pp message not empty>
 <last pp message empty>                          ::=
 <last pp message not empty>                      ::=
-event trigger_pp_error[] = nulled <trigger pp error>
-event trigger_pp_warning[] = nulled <trigger pp warning>
-<trigger pp error>                               ::=
-<trigger pp warning>                             ::=
+event ^trigger_pp_error = predicted <trigger pp error>
+event ^trigger_pp_warning = predicted <trigger pp warning>
+<trigger pp error>                               ::= <TRIGGER PP ERROR>
+<trigger pp warning>                             ::= <TRIGGER PP WARNING>
 
 # The lexical processing of a region:
 # #region
@@ -1349,6 +1359,8 @@ event ^pp_line_indicator = predicted <line indicator>
 <CONDITIONAL SECTION OK>                           ~ /[^\s\S]/ # Matches nothing
 <CONDITIONAL SECTION KO>                           ~ /[^\s\S]/ # Matches nothing
 <PP EXPRESSION>                                    ~ /[^\s\S]/ # Matches nothing
+<TRIGGER PP ERROR>                                 ~ /[^\s\S]/ # Matches nothing
+<TRIGGER PP WARNING>                               ~ /[^\s\S]/ # Matches nothing
 
 __[ identifier or keyword grammar ]__
 # ############################################################################################################
