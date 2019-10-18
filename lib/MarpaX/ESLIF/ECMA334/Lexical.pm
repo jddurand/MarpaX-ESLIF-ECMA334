@@ -166,7 +166,7 @@ use Exception::Class (
 
     'MarpaX::ESLIF::ECMA334::Lexical::Exception::PP::Error' => {
         isa         => 'MarpaX::ESLIF::ECMA334::Lexical::Exception',
-        description => 'Pre-processing error',
+        description => '#error directive',
         alias       => 'throw_pp_exception'
     }
 );
