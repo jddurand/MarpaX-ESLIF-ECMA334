@@ -233,7 +233,7 @@ sub parse {
     #
     # Lexical parse
     #
-    return $self->_parse
+    my ($result, $match) =  $self->_parse
         (
          $LEXICAL_GRAMMAR,
          'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
@@ -243,7 +243,9 @@ sub parse {
          %options,
          input => $self->_preparse(%options),
          encoding => 'UTF-8'
-        )
+        );
+
+    return $result
 }
 
 # ============================================================================
@@ -293,7 +295,7 @@ sub _parse {
     # -------------------------------------------
     my $eslifRecognizerInterface = $eslifRecognizerInterfaceClass->new(%options);
 
-    $log->tracef("[%d] %s: Events: start", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription);
+    $log->tracef("[%d] %s: Start", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription);
 
     # ------------------------
     # Instanciate a recognizer
@@ -361,7 +363,7 @@ sub _parse {
     my $match = bytes::substr($eslifRecognizerInterface->data, 0, $length);
     my $value = $eslifValueInterface->getResult;
 
-    $log->tracef("[%d] %s: Events: success", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription);
+    $log->tracef("[%d] %s: Success", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription);
 
     return ($eslifValueInterface->getResult, $match)
 }
@@ -891,8 +893,9 @@ sub _setAstValue {
         #
         my $discard = $eslifRecognizer->discardLast();
         my $discardBytesLength = bytes::length($discard);
-        $astValue->{offset} -= $discardBytesLength;
-        $astValue->{bytes_length} -= $discardBytesLength;
+        my $currentOffset = bytes::length($eslifRecognizerInterface->data) - bytes::length($eslifRecognizer->input);
+        $astValue->{offset} = $currentOffset - $discardBytesLength;
+        $astValue->{bytes_length} = $discardBytesLength;
         $astValue->{string} = $discard;
     } else {
         ($astValue->{offset}, $astValue->{bytes_length}) = $eslifRecognizer->lastCompletedLocation($nameInGrammar);
@@ -927,7 +930,7 @@ __[ lexical grammar ]__
 # ############################################################################################################
 # Lexical Grammar
 # ############################################################################################################
-:default                                         ::= action => ::convert[UTF-8] symbol-action => ::convert[UTF-8]
+:default                                         ::= action => ::undef symbol-action => ::undef
 :desc                                            ::= 'Lexical grammar'
 :discard                                         ::= <comment> event => comment$
 

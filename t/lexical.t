@@ -21,7 +21,7 @@ BEGIN {
     # Init log
     #
     our $defaultLog4perlConf = '
-log4perl.rootLogger              = TRACE, Screen
+log4perl.rootLogger              = INFO, Screen
 log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
 log4perl.appender.Screen.stderr  = 0
 log4perl.appender.Screen.layout  = PatternLayout
@@ -61,6 +61,7 @@ sub do_test {
     try {
         $lexicalAst = MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options);
     } catch {
+        $lexicalAst = undef;
         if ($_->$_isa('MarpaX::ESLIF::ECMA334::Lexical::Exception')) {
             my ($error, $file, $line, $_line, $column, $expected) = ($_->error // 'undef',
                                                                      $_->file // 'undef',

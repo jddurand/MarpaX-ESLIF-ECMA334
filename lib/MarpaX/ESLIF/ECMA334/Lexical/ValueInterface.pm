@@ -247,8 +247,6 @@ Action associated to a C<input>. It returns a reference to a list flattened inst
 sub inputAction {
     my ($self) = @_;
 
-    use Data::Dumper;
-    print STDERR "===> " . Dumper($self->{lexical_ast});
     return $self->{lexical_ast}
 }
 
