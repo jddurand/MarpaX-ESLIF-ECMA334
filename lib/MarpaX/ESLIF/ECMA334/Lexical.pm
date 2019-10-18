@@ -262,7 +262,7 @@ sub _preparse {
         #
         my $eslifRecognizerInterface = MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface->new(input => $input, encoding => $encoding);
         my $eslifValueInterface = MarpaX::ESLIF::ECMA334::Lexical::ValueInterface->new();
-        $PRE_LEXICAL_GRAMMAR->parse($eslifRecognizerInterface, $eslifValueInterface) || $self->_exception(undef, 'Pre-parse phase failure');
+        $PRE_LEXICAL_GRAMMAR->parse($eslifRecognizerInterface, $eslifValueInterface) || $self->_exception($PRE_LEXICAL_GRAMMAR, $eslifRecognizerInterface, undef, 'Pre-parse phase failure');
         $output = $eslifValueInterface->getResult();
 
         #
@@ -293,6 +293,8 @@ sub _parse {
     # -------------------------------------------
     my $eslifRecognizerInterface = $eslifRecognizerInterfaceClass->new(%options);
 
+    $log->tracef("[%d] %s: Events: start", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription);
+
     # ------------------------
     # Instanciate a recognizer
     # ------------------------
@@ -307,14 +309,14 @@ sub _parse {
     # happen only once in the whole life of parsing, including sub parses.
     # --------------------------------------------------------------------
     if (! defined($eslifRecognizer->input)) {
-        $eslifRecognizer->read || $self->_exception($eslifRecognizer, 'Initial read failed')
+        $eslifRecognizer->read || $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'Initial read failed')
     }
     my $initialLength = bytes::length($eslifRecognizer->input);
 
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
     # -----------------------------------------------------
-    $eslifRecognizer->scan(1) || $self->_exception($eslifRecognizer, 'Initial scan failed');
+    $eslifRecognizer->scan(1) || $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'Initial scan failed');
 
     if ($eslifRecognizer->isCanContinue) {
         {
@@ -331,7 +333,7 @@ sub _parse {
                     if ($eslifRecognizerInterface->hasCompletion && $eslifRecognizerInterface->recurseLevel) {
                         last
                     } else {
-                        $self->_exception($eslifRecognizer, 'resume() failed')
+                        $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'resume() failed')
                     }
                 }
             } while ($eslifRecognizer->isCanContinue)
@@ -349,7 +351,7 @@ sub _parse {
     # -----------------------------------------------------------------------------------------
     my $eslifValueInterface = $eslifValueInterfaceClass->new(%options, lexical_ast => $self->{lexical_ast});
 
-    $self->_exception(undef, 'Valuation failure') unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
+    $self->_exception($eslifGrammar, $eslifRecognizerInterface, undef, 'Valuation failure') unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
 
     # -------------------------------
     # Return the length and the value
@@ -358,6 +360,8 @@ sub _parse {
     my $length = $initialLength - $finalLength;
     my $match = bytes::substr($eslifRecognizerInterface->data, 0, $length);
     my $value = $eslifValueInterface->getResult;
+
+    $log->tracef("[%d] %s: Events: success", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription);
 
     return ($eslifValueInterface->getResult, $match)
 }
@@ -435,34 +439,34 @@ sub _keyword {
 # _exception
 # ============================================================================
 sub _exception {
-    my $self = shift;
+    my ($self, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $fmt, @args) = @_;
 
-    $self->_error(\&throw_exception, @_)
+    $self->_error(\&throw_exception, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $fmt, @args)
 }
 
 # ============================================================================
 # _internal_exception
 # ============================================================================
 sub _internal_exception {
-    my $self = shift;
+    my ($self, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $fmt, @args) = @_;
 
-    $self->_error(\&throw_internal_exception, @_)
+    $self->_error(\&throw_internal_exception, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $fmt, @args)
 }
 
 # ============================================================================
 # _pp_exception
 # ============================================================================
 sub _pp_exception {
-    my $self = shift;
+    my ($self, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $fmt, @args) = @_;
 
-    $self->_error(\&throw_pp_exception, @_)
+    $self->_error(\&throw_pp_exception, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $fmt, @args)
 }
 
 # ============================================================================
 # _error
 # ============================================================================
 sub _error {
-    my ($self, $exceptionCallback, $eslifRecognizer, $fmt, @args) = @_;
+    my ($self, $exceptionCallback, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $fmt, @args) = @_;
 
     my ($_line, $column, $expected);
 
@@ -487,6 +491,9 @@ sub _error {
     }
 
     my $error = @args ? ($fmt ? sprintf($fmt, @args) : '') : ($fmt // '');
+
+    $log->tracef("[%d] %s: Exception: %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $error);
+
     my @exception_args = (
         error => $error,
         file => $self->{filename},
@@ -600,10 +607,10 @@ sub _lexicalEventManager {
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false
         }
         elsif ($event eq 'PP_DEFINE$') {
-            $self->_exception($eslifRecognizer, 'A #define declaration must appear before any token') if $self->{has_token};
+            $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'A #define declaration must appear before any token') if $self->{has_token};
         }
         elsif ($event eq 'PP_UNDEF$') {
-            $self->_exception($eslifRecognizer, 'A #define declaration must appear before any token') if $self->{has_token};
+            $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'A #define declaration must appear before any token') if $self->{has_token};
         }
         elsif ($event eq 'NEW_LINE$') {
             #
@@ -645,7 +652,7 @@ sub _lexicalEventManager {
         elsif ($event eq "last_pp_message_not_empty[]") {
         }
         elsif ($event eq "^trigger_pp_error") {
-            $self->_pp_exception(undef, $self->{last_pp_message});
+            $self->_pp_exception($eslifGrammar, $eslifRecognizerInterface, undef, $self->{last_pp_message});
             #
             # Also coded for coherence, the following <TRIGGER PP ERROR> will not be inject
             # because an exception has been raised
@@ -677,7 +684,7 @@ sub _lexicalEventManager {
             #
             # We depend on the previous 'if' of 'elif' use of conditional section
             #
-            my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // $self->_exception($eslifRecognizer, 'Unbalanced #if/#elif');
+            my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'Unbalanced #if/#elif');
             if ($can_next_conditional_section && $self->{last_pp_expression}) {
                 $match = '';
                 $value = undef;
@@ -693,7 +700,7 @@ sub _lexicalEventManager {
             #
             # We depend on the previous 'if' of 'elif' use of conditional section
             #
-            my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // $self->_exception($eslifRecognizer, 'Unbalanced #if/#elif');
+            my $can_next_conditional_section = $self->{can_next_conditional_section}->[-1] // $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'Unbalanced #if/#elif');
             if ($can_next_conditional_section && ! $self->{last_pp_expression}) {
                 $match = '';
                 $value = undef;
@@ -782,7 +789,7 @@ sub _lexicalEventManager {
             $self->{line_directive_line} = undef;
         }
         else {
-	    $self->_internal_exception(undef, '[%2d] Unsupported event %s', $eslifRecognizerInterface->recurseLevel, $event)
+	    $self->_internal_exception($eslifGrammar, $eslifRecognizerInterface, undef, '[%2d] Unsupported event %s', $eslifRecognizerInterface->recurseLevel, $event)
         }
 
 	if (defined($match)) {
@@ -823,9 +830,9 @@ sub _lexicalEventManager {
     if ($latm >= 0) {
         map {
             $log->tracef("[%d] %s: Alternative: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $_->{name}, $_->{value});
-            $self->_internal_exception($eslifRecognizer, '%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
+            $self->_internal_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, '%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
         } @alternatives;
-        $self->_internal_exception($eslifRecognizer, 'lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
+        $self->_internal_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
         $rc = 1
     }
 
