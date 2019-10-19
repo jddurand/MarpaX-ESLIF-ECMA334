@@ -961,7 +961,7 @@ __[ lexical grammar ]__
 <input elements opt>                             ::= <input elements>
 <input elements>                                 ::= <input element>+
 <input element>                                  ::= <whitespace>
-                                                   | (- <token> -)
+                                                   | <token>
 
 :lexeme ::= <NEW LINE> pause => after event => NEW_LINE$           # Increments current line number
 <new line>                                       ::= <NEW LINE>
@@ -988,6 +988,7 @@ __[ lexical grammar ]__
 <asterisks>                                      ::= '*'+
 <not slash or asterisk>                          ::= /[^\/*]/u # Any Unicode character except / or *
 
+event ^token = predicted <token>
 <token>                                          ::= <identifier>
                                                    | <keyword>
                                                    | <integer literal>
@@ -1260,23 +1261,23 @@ event ^pp_expression = predicted <pp expression>
 
 event pp_if_context[] = nulled <pp if context>
 <pp if context>                                  ::=
-<pp if section>                                  ::= <PP IF> <whitespace> <pp expression> <pp new line> (- <pp if context> -) <conditional section>
+<pp if section>                                  ::= <PP IF> <whitespace> <pp expression> <pp new line> <pp if context> <conditional section>
 
 <pp elif sections>                               ::= <pp elif section>+
 event pp_elif_context[] = nulled <pp elif context>
 <pp elif context>                                ::=
-<pp elif section>                                ::= <PP ELIF> <whitespace> <pp expression> <pp new line> (- <pp elif context> -) <conditional section>
+<pp elif section>                                ::= <PP ELIF> <whitespace> <pp expression> <pp new line> <pp elif context> <conditional section>
 
 event pp_else_context[] = nulled <pp else context>
 <pp else context>                                ::=
-<pp else section>                                ::= <PP ELSE> <pp new line> (- <pp else context> -) <conditional section>
+<pp else section>                                ::= <PP ELSE> <pp new line> <pp else context> <conditional section>
 
 event pp_endif_context[] = nulled <pp endif context>
 <pp endif context>                               ::=
-<pp endif>                                       ::= <PP ENDIF> (- <pp endif context> -) <pp new line>
+<pp endif>                                       ::= <PP ENDIF> <pp endif context> <pp new line>
 
-<conditional section>                            ::= (- <CONDITIONAL SECTION OK> -) <input section opt>
-                                                   | (- <CONDITIONAL SECTION KO> -) <skipped section opt>
+<conditional section>                            ::= <CONDITIONAL SECTION OK> <input section opt>
+                                                   | <CONDITIONAL SECTION KO> <skipped section opt>
 
 <skipped section opt>                            ::= <skipped section>
 <skipped section opt>                            ::=
