@@ -21,7 +21,7 @@ BEGIN {
     # Init log
     #
     our $defaultLog4perlConf = '
-log4perl.rootLogger              = INFO, Screen
+log4perl.rootLogger              = TRACE, Screen
 log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
 log4perl.appender.Screen.stderr  = 0
 log4perl.appender.Screen.layout  = PatternLayout
@@ -290,3 +290,12 @@ class test
 #warning "PP Warning Message"
 /* This is a comment */
 }
+__[020 ok / #pragma text ]__
+#pragma
+#pragma With Text No Space After
+#pragma With Text With Space After   
+#pragma      
+ # pragma
+  #  pragma With Text No Space After
+   #    pragma Using MEDIUM MATHEMATICAL SPACE
+     #    pragma      Using OGHAM SPACE MARK
