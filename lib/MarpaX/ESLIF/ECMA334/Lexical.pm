@@ -314,9 +314,12 @@ sub _parse {
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
     # -----------------------------------------------------
+    $log->tracef("[%d] %s: Scan: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $initialLength);
     $eslifRecognizer->scan(1) || $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'Initial scan failed');
 
-    if ($eslifRecognizer->isCanContinue) {
+    my $isCanContinue = $eslifRecognizer->isCanContinue;
+    $log->tracef("[%d] %s: isCanContinue is %s: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $isCanContinue ? 'true' : 'false', $initialLength);
+    if ($isCanContinue) {
         {
             do {
                 # ------------------------------------------------------------
@@ -324,6 +327,7 @@ sub _parse {
                 # ------------------------------------------------------------
                 while ($self->$eventManager($eslifGrammar, $eslifRecognizer, $eslifRecognizerInterface)) {
                 }
+                $log->tracef("[%d] %s: Resuming: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, bytes::length($eslifRecognizer->input // ''));
                 if (! $eslifRecognizer->resume) {
                     #
                     # This is a failure unless it is a sub-grammar that has reached completion at least once
@@ -334,7 +338,16 @@ sub _parse {
                         $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'resume() failed')
                     }
                 }
-            } while ($eslifRecognizer->isCanContinue)
+                $isCanContinue = $eslifRecognizer->isCanContinue;
+                $log->tracef("[%d] %s: isCanContinue is %s: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $isCanContinue ? 'true' : 'false', bytes::length($eslifRecognizer->input // ''));
+                if (! $isCanContinue) {
+                    # ------------------------------------------------------
+                    # Resume ok but continuation is off: process last events
+                    # ------------------------------------------------------
+                    while ($self->$eventManager($eslifGrammar, $eslifRecognizer, $eslifRecognizerInterface)) {
+                    }
+                }
+            } while ($isCanContinue)
         }
     } else {
         # ------------------------------------------------------------
@@ -354,12 +367,12 @@ sub _parse {
     # -------------------------------
     # Return the length and the value
     # -------------------------------
-    my $finalLength = bytes::length($eslifRecognizer->input) // 0;
+    my $finalLength = bytes::length($eslifRecognizer->input // '');
     my $length = $initialLength - $finalLength;
     my $match = bytes::substr($eslifRecognizerInterface->data, 0, $length);
     my $value = $eslifValueInterface->getResult;
 
-    $log->tracef("[%d] %s: Success", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription);
+    $log->tracef("[%d] %s: Success: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $finalLength);
 
     return ($eslifValueInterface->getResult, $match)
 }
