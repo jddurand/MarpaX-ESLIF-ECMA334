@@ -191,21 +191,17 @@ sub new {
     return bless
         (
          {
-             last_pp_expression => undef,
-             last_conditional_symbol => undef,
-             can_next_conditional_section => [],
-             has_token => 0,
+             last_pp_expression => undef,             # Last <pp expression>
+             last_pp_message => undef,                # Last <pp message>
+             last_conditional_symbol => undef,        # Last #define/#endif conditional symbol
+             can_next_conditional_section => [],      # Booleans to drive the grammar using <CONDITIONAL SECTION OK> or <CONDITIONAL SECTION KO>
+             has_token => 0,                          # Boolean to say if at least one token is seen
              line_hidden => 0,                        # Current line information is hidden or not (for debuggers)
              line => 1,                               # Current line with respect of #line directives
              _line => 1,                              # Current line without respect of #line directives
              line_directive_filename => undef,        # file name in #line directive, but before the end of #line directive
              line_directive_line => undef,            # line number in #line directive, but before the end of #line directive
              filename => undef,                       # Current file name with respect of #line directives
-             last_token_type => undef,                # Last token type
-             last_token_line_start => undef,          # Last token line start
-             last_token__line_start => undef,         # Last token _line start
-             last_token_column_start => undef,        # Last token column start
-             last_pp_message => undef,                # Last <pp message>
              token_value_last_line_start => undef,    # Last token line start pp compliant
              token_value_last__line_start => undef,   # Last token line start from source
              token_value_last_column_start => undef,  # Last token column start
@@ -653,6 +649,9 @@ sub _lexicalEventManager {
         }
         elsif ($event eq "last_pp_message_not_empty[]") {
         }
+        elsif ($event eq "pp_pragma_with_text[]") {
+            $self->_setPragmaTextValue($eslifRecognizerInterface, $eslifRecognizer, 'pragma text');
+        }
         elsif ($event eq "^trigger_pp_error") {
             $self->_pp_exception($eslifGrammar, $eslifRecognizerInterface, undef, $self->{last_pp_message});
             #
@@ -876,6 +875,17 @@ sub _setCommentValue {
 }
 
 # ============================================================================
+# _setPragmaTextValue
+# ============================================================================
+sub _setPragmaTextValue {
+    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $type) = @_;
+    #
+    # Push a value for the AST
+    #
+    $self->_setAstValue($eslifRecognizerInterface, $eslifRecognizer, 'pragma', 'input characters', $type);
+}
+
+# ============================================================================
 # _setAstValue
 # ============================================================================
 sub _setAstValue {
@@ -886,7 +896,7 @@ sub _setAstValue {
     $astValue->{line_hidden} = $self->{line_hidden};
     $astValue->{line_end} = $self->{line};
     $astValue->{_line_end} = $self->{_line};
-    $astValue->{column_end} = $eslifRecognizer->column - 1;
+    $astValue->{column_end} = $eslifRecognizer->column;
     if ($nameInGrammar eq ':discard') {
         #
         # Special case for :discard
@@ -1337,10 +1347,12 @@ event ^pp_line_indicator = predicted <line indicator>
 <file name characters>                           ::= <file name character>+
 <file name character>                            ::= /[^\x{0022}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY INPUT CHARACTER EXCEPT 0022 AND NEW LINE CHARACTER>
 
+event pp_pragma_with_text[] = nulled <pp pragma with text>
 <pp pragma>                                      ::= <PP PRAGMA> <pp pragma text>
-<pp pragma text>                                 ::= (- <new line> -)
-                                                   | (- <whitespace> -) <input characters>     (- <new line> -) # Only #pragma's text with a not-nullable text are of interest
-                                                   | (- <whitespace> -)
+<pp pragma text>                                 ::= <new line>
+                                                   | <whitespace> <input characters> <new line> <pp pragma with text> # Only #pragma's text with a not-nullable text are of interest
+                                                   | <whitespace> <new line>
+<pp pragma with text>                            ::=
 
 #
 # Lexemes
