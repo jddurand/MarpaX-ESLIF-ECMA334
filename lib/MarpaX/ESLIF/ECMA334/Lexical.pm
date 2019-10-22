@@ -314,46 +314,18 @@ sub _parse {
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
     # -----------------------------------------------------
-    $log->tracef("[%d] %s: Scan: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $initialLength);
-    $eslifRecognizer->scan(1) || $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'Initial scan failed');
+    $self->_scan($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $eventManager);
 
-    my $isCanContinue = $eslifRecognizer->isCanContinue;
-    $log->tracef("[%d] %s: isCanContinue is %s: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $isCanContinue ? 'true' : 'false', $initialLength);
-    if ($isCanContinue) {
-        {
-            do {
-                # ------------------------------------------------------------
-                # Event loop can do a lexeme complete that triggers new events
-                # ------------------------------------------------------------
-                while ($self->$eventManager($eslifGrammar, $eslifRecognizer, $eslifRecognizerInterface)) {
-                }
-                $log->tracef("[%d] %s: Resuming: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, bytes::length($eslifRecognizer->input // ''));
-                if (! $eslifRecognizer->resume) {
-                    #
-                    # This is a failure unless it is a sub-grammar that has reached completion at least once
-                    #
-                    if ($eslifRecognizerInterface->hasCompletion && $eslifRecognizerInterface->recurseLevel) {
-                        last
-                    } else {
-                        $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'resume() failed')
-                    }
-                }
-                $isCanContinue = $eslifRecognizer->isCanContinue;
-                $log->tracef("[%d] %s: isCanContinue is %s: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $isCanContinue ? 'true' : 'false', bytes::length($eslifRecognizer->input // ''));
-                if (! $isCanContinue) {
-                    # ------------------------------------------------------
-                    # Resume ok but continuation is off: process last events
-                    # ------------------------------------------------------
-                    while ($self->$eventManager($eslifGrammar, $eslifRecognizer, $eslifRecognizerInterface)) {
-                    }
-                }
-            } while ($isCanContinue)
-        }
-    } else {
-        # ------------------------------------------------------------
-        # Event loop can do a lexeme complete that triggers new events
-        # ------------------------------------------------------------
-        while ($self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)) {
+    while ($eslifRecognizer->isCanContinue) {
+        if (! $self->_resume($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $eventManager)) {
+            #
+            # This is a failure unless it is a sub-grammar that has reached completion at least once
+            #
+            if ($eslifRecognizerInterface->hasCompletion && $eslifRecognizerInterface->recurseLevel) {
+                last
+            } else {
+                $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'resume() failed')
+            }
         }
     }
 
@@ -375,6 +347,38 @@ sub _parse {
     $log->tracef("[%d] %s: Success: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $finalLength);
 
     return ($eslifValueInterface->getResult, $match)
+}
+
+# ============================================================================
+# _scan
+# ============================================================================
+sub _scan {
+    my ($self, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $eventManager) = @_;
+
+    $log->tracef("[%d] %s: Scan on %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, bytes::length($eslifRecognizer->input // ''));
+    $eslifRecognizer->scan(1) || $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'Initial scan failed');
+    #
+    # Scan can generate events
+    #
+    while ($self->$eventManager($eslifGrammar, $eslifRecognizer, $eslifRecognizerInterface)) {
+    }
+}
+
+# ============================================================================
+# _resume
+# ============================================================================
+sub _resume {
+    my ($self, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $eventManager) = @_;
+
+    $log->tracef("[%d] %s: Resume on %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, bytes::length($eslifRecognizer->input // ''));
+    my $rc = $eslifRecognizer->resume;
+    #
+    # Resume can generate events, even in case of failure
+    #
+    while ($self->$eventManager($eslifGrammar, $eslifRecognizer, $eslifRecognizerInterface)) {
+    }
+
+    return $rc
 }
 
 # ============================================================================
@@ -577,9 +581,10 @@ sub _lexicalEventManager {
     }
 
     $log->tracef("[%d] %s: Events: %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, \@events);
-    my ($identifier_or_keyword_done, $keyword_done) = (0, 0);
+    my ($identifier_or_keyword, $identifier_or_keyword_match, $identifier_or_keyword_done) = (undef, undef, 0);
+    my ($keyword, $keyword_match, $keyword_done) = (undef, undef, 0);
     foreach my $event (@events) {
-        my ($identifier_or_keyword, $identifier_or_keyword_match, $keyword, $keyword_match, $match, $name, $value, $length, $pp_expression) = (undef, undef, undef, undef, undef, undef, undef, undef, undef);
+        my ($match, $name, $value, $length, $pp_expression) = (undef, undef, undef, undef, undef, undef, undef, undef, undef);
 
         if ($event eq "'exhausted'") {
             $eslifRecognizerInterface->hasCompletion(1)
@@ -846,6 +851,7 @@ sub _lexicalEventManager {
             $log->tracef("[%d] %s: Alternative: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $_->{name}, $_->{value});
             $self->_internal_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, '%s alternative failure', $_->{name}) unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
         } @alternatives;
+        $log->tracef("[%d] %s: Lexeme complete on %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $latm);
         $self->_internal_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'lexeme complete failure') unless $eslifRecognizer->lexemeComplete($latm);
         $rc = 1
     }
