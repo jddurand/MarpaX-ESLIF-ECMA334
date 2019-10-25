@@ -391,10 +391,4 @@ sub single_regular_string_literal_character_is_below_0xFFFF {
     return ord($lexeme) < 0xFFFF
 }
 
-=head1 SEE ALSO
-
-L<MarpaX::ESLIF::ECMA404>
-
-=cut
-
 1;

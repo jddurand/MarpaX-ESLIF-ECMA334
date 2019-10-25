@@ -2,6 +2,7 @@ use strict;
 use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334::Syntactic;
+use MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface;
 
 use Log::Any qw/$log/;
 
@@ -21,12 +22,12 @@ This module parses syntactically the C# language as per Standard ECMA-334 5th Ed
     #
     # The input to syntactic grammar must be the lexical output from lexical grammar
     #
-    my $lexical      = MarpaX::ESLIF::ECMA334::Lexical->new();
-    my $input        = "public interface Test { bool MyTest(); }"
-    my $lexicalValue = $lexical->parse(input => input, encoding => 'UTF-16', definitions => { 'TRUE' => $MarpaX::ESLIF::true });
+    my $lexical    = MarpaX::ESLIF::ECMA334::Lexical->new();
+    my $input      = "public interface Test { bool MyTest(); }"
+    my $lexicalAst = $lexical->parse(input => input, encoding => 'UTF-16', definitions => { 'TRUE' => $MarpaX::ESLIF::true });
 
-    my $syntactic    = MarpaX::ESLIF::ECMA334::Syntactic->new();
-    my $ast          = $syntactic->parse(lexicalValue => $lexicalValue);
+    my $syntacticAst = MarpaX::ESLIF::ECMA334::Syntactic->new();
+    my $ast          = $syntactic->parse(lexicalAst => $lexicalAst);
 
 =cut
 
@@ -35,25 +36,8 @@ use Data::Section -setup;
 use Log::Any qw/$log/;
 use MarpaX::ESLIF 3.0.15; # if-action
 
-    use Log::Log4perl qw/:easy/;
-    use Log::Any::Adapter;
-    use Log::Any qw/$log/;
-    use Data::Dumper;
-    #
-    # Init log
-    #
-    our $defaultLog4perlConf = '
-    log4perl.rootLogger              = WARN, Screen
-    log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
-    log4perl.appender.Screen.stderr  = 0
-    log4perl.appender.Screen.layout  = PatternLayout
-    log4perl.appender.Screen.layout.ConversionPattern = %d %-5p %6P %m{chomp}%n
-    ';
-    Log::Log4perl::init(\$defaultLog4perlConf);
-    Log::Any::Adapter->set('Log4perl');
-
-my $SYNTACTIC_BNF             = ${__PACKAGE__->section_data('syntactic grammar')};
-my $SYNTACTIC_GRAMMAR         = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $SYNTACTIC_BNF);
+my $SYNTACTIC_BNF     = ${__PACKAGE__->section_data('syntactic grammar')};
+my $SYNTACTIC_GRAMMAR = MarpaX::ESLIF::Grammar->new(MarpaX::ESLIF->new($log), $SYNTACTIC_BNF);
 
 =head1 SUBROUTINES/METHODS
 
@@ -89,7 +73,7 @@ Parser method. C<%options> is hash containing:
 
 =over
 
-=item lexicalValue
+=item lexicalAst
 
 Output from lexical parse.
 
@@ -102,6 +86,98 @@ Output is an AST of the syntactic parse.
 sub parse {
     my ($self, %options) = @_;
 
+    #
+    # Create recognizer
+    #
+    my $eslifRecognizerInterface = MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface->new(%options);
+
+    $log->tracef("[%s] Start", $SYNTACTIC_GRAMMAR->currentDescription);
+    my $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($SYNTACTIC_GRAMMAR, $eslifRecognizerInterface);
+
+    my $scanned = 0;
+
+    while ($eslifRecognizer->read) {
+        my $nextData = $eslifRecognizerInterface->nextData;
+        my $nextDataLength = bytes::length($nextData->{string});
+        $log->tracef("[%s] Next data: type=%s string=%s (%d bytes)", $SYNTACTIC_GRAMMAR->currentDescription, $nextData->{type}, $nextData->{string}, $nextDataLength);
+
+        if (! $scanned) {
+            #
+            # Start the scan
+            #
+            $self->_scan($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager);
+            $scanned = 1;
+        } else {
+            $self->_resume($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager);
+        }
+    }
+
+    $log->tracef("[%s] End", $SYNTACTIC_GRAMMAR->currentDescription);
+}
+
+# ============================================================================
+# _scan
+# ============================================================================
+sub _scan {
+    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $eventManager) = @_;
+
+    $log->tracef("[%s] Scan on %d bytes", $SYNTACTIC_GRAMMAR->currentDescription, bytes::length($eslifRecognizer->input // ''));
+    $eslifRecognizer->scan(1) || croak 'Initial scan failed';
+    #
+    # Scan can generate events
+    #
+    while ($self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)) {
+    }
+}
+
+# ============================================================================
+# _resume
+# ============================================================================
+sub _resume {
+    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $eventManager) = @_;
+
+    $log->tracef("[%s]: Resume on %d bytes", $SYNTACTIC_GRAMMAR->currentDescription, bytes::length($eslifRecognizer->input // ''));
+    my $rc = $eslifRecognizer->resume;
+    #
+    # Resume can generate events, even in case of failure
+    #
+    while ($self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)) {
+    }
+
+    return $rc
+}
+
+# ============================================================================
+# _SyntacticEventManager
+# ============================================================================
+#
+# The event manager must always return a true value if it has performed a lexeme complete
+#
+sub _SyntacticEventManager {
+    my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
+
+    #
+    # Do we have anything pending from lexical AST ?
+    #
+    my $nextData = $eslifRecognizerInterface->nextData;
+    return 0 unless defined($nextData);
+
+    my $rc = 0;
+    my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
+
+    $log->tracef("[%s] Events: %s", $SYNTACTIC_GRAMMAR->currentDescription, \@events);
+    foreach my $event (@events) {
+
+        if ($event eq '^identifier') {
+            if ($nextData->{type} eq 'identifier') {
+                $log->tracef("[%s] %s: IDENTIFIER: %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextData->{string});
+                $eslifRecognizer->lexemeRead('IDENTIFIER', $nextData->{string}, 0, 1) || croak "IDENTIFIER read failure";
+                $rc = 1;
+            }
+        }
+    }
+
+    return $rc;
 }
 
 =head1 NOTES
@@ -116,6 +192,7 @@ __DATA__
 __[ syntactic grammar ]__
 :default ::= action => ::ast
 :desc ::= 'Syntactic grammar'
+:start ::= <compilation unit>
 
 #  --------------
 ## Basic concepts
@@ -1075,13 +1152,17 @@ __[ syntactic grammar ]__
 # --------------------------------------
 # Lexemes (injected after lexical parse)
 # --------------------------------------
+event ^identifier = predicted <identifier>
 <identifier>                               ::= <IDENTIFIER>
 <IDENTIFIER>                                 ~ [^\s\S] # Matches nothing
+event ^literal = predicted <literal>
 <literal>                                  ::= <LITERAL>
 <LITERAL>                                    ~ [^\s\S] # Matches nothing
 <IDENTIFIER EQUAL TO assembly OR module>     ~ [^\s\S] # Matches nothing
 <IDENTIFIER NOT EQUAL TO assembly OR module> ~ [^\s\S] # Matches nothing
+event ^keyword = predicted <keyword>
 <keyword>                                  ::= <KEYWORD>
 <KEYWORD>                                    ~ [^\s\S] # Matches nothing
+event ^input_characters = predicted <input characters>
 <input characters>                         ::= <INPUT CHARACTERS>
 <INPUT CHARACTERS>                           ~ [^\s\S] # Matches nothing

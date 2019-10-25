@@ -250,12 +250,6 @@ sub inputAction {
     return $self->{lexical_ast}
 }
 
-=head1 SEE ALSO
-
-L<MarpaX::ESLIF::ECMA334>
-
-=cut
-
 sub _normalized_condition_symbol {
     #
     # - Each unicode-escape-sequence is transformed into its corresponding Unicode character.
