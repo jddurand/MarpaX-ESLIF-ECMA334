@@ -58,11 +58,12 @@ sub do_test {
 
     my %options = (input => $input, encoding => $encoding);
 
-    my $ast;
+    my $status;
     try {
-        $ast = MarpaX::ESLIF::ECMA334->new->parse(%options);
+        my $syntacticAst = MarpaX::ESLIF::ECMA334->new->parse(%options);
+        diag Dumper($syntacticAst);
+        $status = 1;
     } catch {
-        $ast = undef;
         if ($_->$_isa('MarpaX::ESLIF::ECMA334::Lexical::Exception')) {
             my ($error, $file, $line, $_line, $column, $expected) = ($_->error // 'undef',
                                                                      $_->file // 'undef',
@@ -80,15 +81,10 @@ sub do_test {
         } else {
             diag $_
         }
-    } finally {
-        use Data::Scan::Printer;
-        local %Data::Scan::Printer::Option = (with_ansicolor => 0);
-
-        # diag Dumper($ast) if defined($ast)
-        dspp($ast) if defined($ast)
+        $status = 0;
     };
 
-    ok($want_ok ? defined($ast) : !defined($ast), $name);
+    ok($want_ok ? $status : !$status, $name);
 }
 
 #

@@ -57,11 +57,12 @@ sub do_test {
 
     my %options = (input => $input, encoding => $encoding);
 
-    my $lexicalAst;
+    my $status;
     try {
-        $lexicalAst = MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options);
+        my $lexicalAst = MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options);
+        diag Dumper($lexicalAst);
+        $status = 1;
     } catch {
-        $lexicalAst = undef;
         if ($_->$_isa('MarpaX::ESLIF::ECMA334::Lexical::Exception')) {
             my ($error, $file, $line, $_line, $column, $expected) = ($_->error // 'undef',
                                                                      $_->file // 'undef',
@@ -79,11 +80,10 @@ sub do_test {
         } else {
             diag $_
         }
-    } finally {
-        diag Dumper($lexicalAst) if defined($lexicalAst)
+        $status = 0;
     };
 
-    ok($want_ok ? defined($lexicalAst) : !defined($lexicalAst), $name);
+    ok($want_ok ? $status : !$status, $name);
 }
 
 #

@@ -206,7 +206,7 @@ sub new {
              token_value_last__line_start => undef,   # Last token line start from source
              token_value_last_column_start => undef,  # Last token column start
              comments => [],                          # Comments are transveral in the grammar: we will reinject them in order in the final AST
-             lexical_ast => []                        # Flattened list of tokens, comments and #pragma messages
+             lexical_ast => undef                     # Flattened list of tokens, comments and #pragma messages
          },
          $pkg)
 }
@@ -941,6 +941,7 @@ sub _setAstValue {
     $astValue->{length} = length($astValue->{string});
     $astValue->{type} = $type;
 
+    $self->{lexical_ast} //= [];
     push(@{$self->{lexical_ast}}, $astValue);
 }
 
