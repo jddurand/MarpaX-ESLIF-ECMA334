@@ -130,7 +130,11 @@ Returns last bunch of data. Depends on the next value from lexical AST.
 sub data {
     my ($self) = @_;
 
-    return $self->{_currentAstItem}->{string} # Whatever the type, next data always have a string form
+    if ($self->{_currentAstItem}->{type} eq 'pragma text') {
+        return '#pragma ' . $self->{_currentAstItem}->{string}
+    } else {
+        return $self->{_currentAstItem}->{string}
+    }
 }
 
 # ============================================================================

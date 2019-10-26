@@ -39,7 +39,6 @@ diag("###########################################################");
 diag("Inline data");
 diag("###########################################################");
 foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAGE__->section_data_names) {
-    next unless $_ =~ /002/;
     my $want_ok = ($_ =~ /^[0-9]+\s*ok/);
     my $want_ko = ($_ =~ /^[0-9]+\s*ko/);
     #
