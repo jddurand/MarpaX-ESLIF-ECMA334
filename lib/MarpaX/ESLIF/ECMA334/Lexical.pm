@@ -1041,7 +1041,6 @@ event ^identifier_or_keyword = predicted <identifier or keyword>
 <identifier or keyword>                          ::= <IDENTIFIER OR KEYWORD>
 
 event ^available_identifier = predicted <available identifier>
-<available identifier>                           ::= /\w+/
 <available identifier>                           ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
 
 event ^keyword = predicted <keyword>
