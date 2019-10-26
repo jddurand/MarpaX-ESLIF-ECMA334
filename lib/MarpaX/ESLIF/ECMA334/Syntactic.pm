@@ -734,7 +734,7 @@ __[ syntactic grammar ]__
 <global attributes opt>                ::=
 <namespace declaration>                ::= 'namespace' <qualified identifier> <namespace body> ';'
                                          | 'namespace' <qualified identifier> <namespace body>
-<qualified identifier>                 ::= <identifier>+  separator => ',' proper => 1 # No hide-separator
+<qualified identifier>                 ::= <identifier>+  separator => '.' proper => 1 # No hide-separator
 <namespace body>                       ::= '{' <extern alias directives opt> <using directives opt> <namespace member declarations opt> '}'
 <extern alias directives opt>          ::= <extern alias directives>
 <extern alias directives opt>          ::=

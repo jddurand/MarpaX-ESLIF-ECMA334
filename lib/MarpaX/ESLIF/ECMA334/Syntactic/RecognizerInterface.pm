@@ -2,7 +2,6 @@ use strict;
 use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface;
-use Carp qw/croak/;
 use Log::Any qw/$log/;
 
 # ABSTRACT: MarpaX::ESLIF::ECMA334 Syntactic Recognizer Interface
@@ -40,7 +39,7 @@ Instantiate a new recognizer interface object.
 sub new {
     my ($pkg, %options) = @_;
 
-    my $lexicalAst = delete($options{lexicalAst}) // croak 'Undefined lexical AST';
+    my $lexicalAst = delete($options{lexicalAst}) // [];
 
     return bless
     {
