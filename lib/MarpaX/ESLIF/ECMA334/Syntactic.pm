@@ -83,6 +83,21 @@ Output is an AST of the syntactic parse.
 
 =cut
 
+# --------------------------------------------------------------------------
+# Lexical AST returns a flat list of inputs, all have a "type", that can be:
+#
+#   Lexical Type                    Syntactic
+# - "identifier"                    Lexeme IDENTIFIER
+# - "keyword"                       Lexeme KEYWORD
+# - "integer literal"               Lexeme LITERAL
+# - "real literal"                  Lexeme LITERAL
+# - "character literal"             Lexeme LITERAL
+# - "string literal"                Lexeme LITERAL
+# - "operator or punctuator"        Standard input
+# - "comment"                       :discard
+# - "pragma text"                   :discard
+# --------------------------------------------------------------------------
+#
 sub parse {
     my ($self, %options) = @_;
 
@@ -94,22 +109,14 @@ sub parse {
     $log->tracef("[%s] Start", $SYNTACTIC_GRAMMAR->currentDescription);
     my $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($SYNTACTIC_GRAMMAR, $eslifRecognizerInterface);
 
-    my $scanned = 0;
-
-    while ($eslifRecognizer->read) {
-        my $nextData = $eslifRecognizerInterface->nextData;
-        my $nextDataLength = bytes::length($nextData->{string});
-        $log->tracef("[%s] Next data: type=%s string=%s (%d bytes)", $SYNTACTIC_GRAMMAR->currentDescription, $nextData->{type}, $nextData->{string}, $nextDataLength);
-
-        if (! $scanned) {
-            #
-            # Start the scan
-            #
-            $self->_scan($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager);
-            $scanned = 1;
-        } else {
-            $self->_resume($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager);
-        }
+    #
+    # Start the scan
+    #
+    $self->_scan($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager);
+    #
+    # Resume until we are done
+    #
+    while ($self->_resume($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager)) {
     }
 
     $log->tracef("[%s] End", $SYNTACTIC_GRAMMAR->currentDescription);
@@ -121,7 +128,7 @@ sub parse {
 sub _scan {
     my ($self, $eslifRecognizerInterface, $eslifRecognizer, $eventManager) = @_;
 
-    $log->tracef("[%s] Scan on %d bytes", $SYNTACTIC_GRAMMAR->currentDescription, bytes::length($eslifRecognizer->input // ''));
+    $log->tracef("[%s] Scan", $SYNTACTIC_GRAMMAR->currentDescription);
     $eslifRecognizer->scan(1) || croak 'Initial scan failed';
     #
     # Scan can generate events
@@ -136,7 +143,7 @@ sub _scan {
 sub _resume {
     my ($self, $eslifRecognizerInterface, $eslifRecognizer, $eventManager) = @_;
 
-    $log->tracef("[%s]: Resume on %d bytes", $SYNTACTIC_GRAMMAR->currentDescription, bytes::length($eslifRecognizer->input // ''));
+    $log->tracef("[%s] Resume", $SYNTACTIC_GRAMMAR->currentDescription);
     my $rc = $eslifRecognizer->resume;
     #
     # Resume can generate events, even in case of failure
@@ -156,12 +163,6 @@ sub _resume {
 sub _SyntacticEventManager {
     my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
 
-    #
-    # Do we have anything pending from lexical AST ?
-    #
-    my $nextData = $eslifRecognizerInterface->nextData;
-    return 0 unless defined($nextData);
-
     my $rc = 0;
     my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
 
@@ -169,11 +170,65 @@ sub _SyntacticEventManager {
     foreach my $event (@events) {
 
         if ($event eq '^identifier') {
-            if ($nextData->{type} eq 'identifier') {
-                $log->tracef("[%s] %s: IDENTIFIER: %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextData->{string});
-                $eslifRecognizer->lexemeRead('IDENTIFIER', $nextData->{string}, 0, 1) || croak "IDENTIFIER read failure";
+            my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
+
+            if (defined($nextAstItem) && $nextAstItem->{type} eq 'identifier') {
+                $eslifRecognizerInterface->consumeNextAstItem;
+                $log->tracef("[%s] IDENTIFIER: %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextAstItem->{string});
+                $eslifRecognizer->lexemeRead('IDENTIFIER', $nextAstItem->{string}, 0, 1) || croak "IDENTIFIER read failure";
                 $rc = 1;
             }
+        }
+        elsif ($event eq '^identifier_equal_to_assembly_or_module') {
+            my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
+
+            if (defined($nextAstItem) && $nextAstItem->{type} eq 'identifier' && ($nextAstItem->{string} eq 'assembly' || $nextAstItem->{string} eq 'module')) {
+                $eslifRecognizerInterface->consumeNextAstItem;
+                $log->tracef("[%s] IDENTIFIER: %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextAstItem->{string});
+                $eslifRecognizer->lexemeRead('IDENTIFIER', $nextAstItem->{string}, 0, 1) || croak "IDENTIFIER read failure";
+                $rc = 1;
+            }
+        }
+        elsif ($event eq '^identifier_not_equal_to_assembly_or_module') {
+            my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
+
+            if (defined($nextAstItem) && $nextAstItem->{type} eq 'identifier' && ($nextAstItem->{string} ne 'assembly' && $nextAstItem->{string} ne 'module')) {
+                $eslifRecognizerInterface->consumeNextAstItem;
+                $log->tracef("[%s] IDENTIFIER: %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextAstItem->{string});
+                $eslifRecognizer->lexemeRead('IDENTIFIER', $nextAstItem->{string}, 0, 1) || croak "IDENTIFIER read failure";
+                $rc = 1;
+            }
+        }
+        elsif ($event eq '^literal') {
+            my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
+
+            if (defined($nextAstItem) && $nextAstItem->{type} =~ /\bliteral$/) {
+                $eslifRecognizerInterface->consumeNextAstItem;
+                $log->tracef("[%s] LITERAL (%s): %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextAstItem->{type}, $nextAstItem->{string});
+                $eslifRecognizer->lexemeRead('LITERAL', $nextAstItem->{string}, 0, 1) || croak "LITERAL read failure";
+                $rc = 1;
+            }
+        }
+        elsif ($event eq '^keyword') {
+            my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
+
+            if (defined($nextAstItem) && $nextAstItem->{type} eq 'keyword') {
+                $eslifRecognizerInterface->consumeNextAstItem;
+                $log->tracef("[%s] KEYWORD: %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextAstItem->{string});
+                $eslifRecognizer->lexemeRead('KEYWORD', $nextAstItem->{string}, 0, 1) || croak "LITERAL read failure";
+                $rc = 1;
+            }
+        }
+        elsif ($event eq 'comment$') {
+            my $comment = $eslifRecognizer->discardLast();
+            $log->tracef("[%s] %s: comment: %s", $SYNTACTIC_GRAMMAR->currentDescription, $comment);
+        }
+        elsif ($event eq 'pragma_text$') {
+            my $pragma = $eslifRecognizer->discardLast();
+            $log->tracef("[%s] %s: #pragma: %s", $SYNTACTIC_GRAMMAR->currentDescription, $pragma);
+        }
+        else {
+            croak "Unsupported event $event"
         }
     }
 
@@ -193,6 +248,8 @@ __[ syntactic grammar ]__
 :default ::= action => ::ast
 :desc ::= 'Syntactic grammar'
 :start ::= <compilation unit>
+:discard ::= <comment> event => comment$
+:discard ::= <pragma text> event => pragma_text$
 
 #  --------------
 ## Basic concepts
@@ -1102,7 +1159,7 @@ __[ syntactic grammar ]__
 <global attribute section>             ::= '[' <global attribute target specifier> <attribute list> ']'
                                          | '[' <global attribute target specifier> <attribute list> ',' ']'
 <global attribute target specifier>    ::= <global attribute target> ':'
-<global attribute target>              ::= <IDENTIFIER EQUAL TO assembly OR module>
+<global attribute target>              ::= <identifier equal to assembly or module>
 <attributes>                           ::= <attribute sections>
 <attribute sections>                   ::= <attribute section>+
 <attribute section>                    ::= '[' <attribute target specifier opt> <attribute list> ']'
@@ -1110,7 +1167,7 @@ __[ syntactic grammar ]__
 <attribute target specifier opt>       ::= <attribute target specifier>
 <attribute target specifier opt>       ::=
 <attribute target specifier>           ::= <attribute target> ':'
-<attribute target>                     ::= <IDENTIFIER NOT EQUAL TO assembly OR module>
+<attribute target>                     ::= <identifier not equal to assembly or module>
                                          | <keyword>
 <attribute list>                       ::= <attribute>+ separator => ','  proper => 1 hide-separator => 1
 <attribute>                            ::= <attribute name> <attribute arguments opt>
@@ -1138,17 +1195,6 @@ __[ syntactic grammar ]__
 <delimited comment text opt>           ::= <delimited comment text>
 <delimited comment text opt>           ::=
 
-# ---------------------------
-# Copied from lexical grammar
-# ---------------------------
-<delimited comment text>               ::= <delimited comment section>+
-<delimited comment section>            ::= '/'
-                                         | <asterisks opt> <not slash or asterisk>
-<asterisks opt>                        ::=
-<asterisks opt>                        ::= <asterisks>
-<asterisks>                            ::= '*'+
-<not slash or asterisk>                ::= /[^\/*]/u # Any Unicode character except / or *
-
 # --------------------------------------
 # Lexemes (injected after lexical parse)
 # --------------------------------------
@@ -1158,11 +1204,37 @@ event ^identifier = predicted <identifier>
 event ^literal = predicted <literal>
 <literal>                                  ::= <LITERAL>
 <LITERAL>                                    ~ [^\s\S] # Matches nothing
-<IDENTIFIER EQUAL TO assembly OR module>     ~ [^\s\S] # Matches nothing
-<IDENTIFIER NOT EQUAL TO assembly OR module> ~ [^\s\S] # Matches nothing
+event ^identifier_equal_to_assembly_or_module = predicted <identifier equal to assembly or module>
+<identifier equal to assembly or module>   ::= <IDENTIFIER EQUAL TO ASSEMBLY OR MODULE>
+<IDENTIFIER EQUAL TO ASSEMBLY OR MODULE>     ~ [^\s\S] # Matches nothing
+event ^identifier_equal_to_assembly_or_module = predicted <identifier equal to assembly or module>
+<identifier not equal to assembly or module>   ::= <IDENTIFIER NOT EQUAL TO ASSEMBLY OR MODULE>
+<IDENTIFIER NOT EQUAL TO ASSEMBLY OR MODULE> ~ [^\s\S] # Matches nothing
 event ^keyword = predicted <keyword>
 <keyword>                                  ::= <KEYWORD>
 <KEYWORD>                                    ~ [^\s\S] # Matches nothing
-event ^input_characters = predicted <input characters>
-<input characters>                         ::= <INPUT CHARACTERS>
-<INPUT CHARACTERS>                           ~ [^\s\S] # Matches nothing
+
+# -------
+# Comment
+# -------
+<comment>                                        ::= <single line comment>
+                                                   | <delimited comment>
+<single line comment>                            ::= '//' <input characters opt>
+<input characters>                               ::= <input character>+
+<input character>                                ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY UNICODE CHARACTER EXCEPT A NEW LINE CHARACTER>
+<new line character>                             ::= /[\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u
+
+<delimited comment>                              ::= '/*' <delimited comment text opt> <asterisks> '/'
+<delimited comment text>                         ::= <delimited comment section>+
+<delimited comment section>                      ::= '/'
+                                                   | <asterisks opt> <not slash or asterisk>
+<asterisks opt>                                  ::=
+<asterisks opt>                                  ::= <asterisks>
+<asterisks>                                      ::= '*'+
+<not slash or asterisk>                          ::= /[^\/*]/u # Any Unicode character except / or *
+
+# -----------
+# Pragma text
+# -----------
+<pragma text>                                    ::= '#pragma '<input characters> <new line>
+<new line>                                       ::= /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u

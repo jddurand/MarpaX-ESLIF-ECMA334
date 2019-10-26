@@ -60,7 +60,7 @@ sub do_test {
 
     my $lexicalAst;
     try {
-        $lexicalAst = MarpaX::ESLIF::ECMA334->new->parse(%options);
+        $lexicalAst = $lexicalParser->parse(%options);
     } catch {
         $lexicalAst = undef;
         if ($_->$_isa('MarpaX::ESLIF::ECMA334::Lexical::Exception')) {

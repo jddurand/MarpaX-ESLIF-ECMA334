@@ -44,8 +44,9 @@ sub new {
 
     return bless
     {
-        lexicalAst => $lexicalAst,
-        _nextData => undef
+        _lexicalAst => $lexicalAst,
+        _currentAstItem => undef,
+        _eof => 0
     }, $pkg
 }
 
@@ -66,13 +67,13 @@ Returns a true or a false value, indicating if last read was successful.
 sub read {
     my ($self) = @_;
 
-    if (! @{$self->{lexicalAst}}) {
-        $self->{_nextData} = undef;
+    if (! @{$self->{_lexicalAst}}) {
+        $self->{_eof} = 1;
         return 0
-    } else {
-        $self->{_nextData} = shift @{$self->{lexicalAst}};
-        return 1;
     }
+
+    $self->{_currentAstItem} = shift @{$self->{_lexicalAst}};
+    return 1;
 }
 
 # ============================================================================
@@ -88,7 +89,7 @@ Returns a true or a false value, indicating if end-of-data is reached.
 sub isEof {
     my ($self) = @_;
 
-    return scalar(@{$self->{lexicalAst}}) # We return true until lexical AST (an array reference) is empty
+    return $self->{_eof}
 }
 
 # ============================================================================
@@ -132,9 +133,8 @@ Returns last bunch of data. Depends on the next value from lexical AST.
 sub data {
     my ($self) = @_;
 
-    my $nextData = $self->{_nextData} // croak 'Undefined next value from lexical AST';
-
-    return $nextData->{string} # Whatever the type, next data always have a string form
+    $log->tracef('==> "%s"', $self->{_currentAstItem}->{string});
+    return $self->{_currentAstItem}->{string} # Whatever the type, next data always have a string form
 }
 
 # ============================================================================
@@ -194,19 +194,52 @@ sub isWithTrack {
 }
 
 # ============================================================================
-# nextData
+# currentAstItem
 # ============================================================================
 
-=head3 nextData($self)
+=head3 currentAstItem($self)
 
-Returns the next value from lexical AST.
+Returns the current structured item from lexical AST.
 
 =cut
 
-sub nextData {
+sub currentAstItem {
     my ($self) = @_;
 
-    return $self->{_nextData}
+    return $self->{_currentAstItem}
+}
+
+# ============================================================================
+# nextAstItem
+# ============================================================================
+
+=head3 nextAstItem($self)
+
+Returns the next structured item from lexical AST.
+
+=cut
+
+sub nextAstItem {
+    my ($self) = @_;
+
+    return $self->{_eof} ? undef : $self->{_lexicalAst}->[0]
+}
+
+# ============================================================================
+# consumeNextAstItem
+# ============================================================================
+
+=head3 consumeNextAstItem($self)
+
+Consumes the next structured item from lexical AST.
+
+=cut
+
+sub consumeNextAstItem {
+    my ($self) = @_;
+
+    $log->tracef('... "%s"', $self->{_lexicalAst}->[0]->{string});
+    splice(@{$self->{_lexicalAst}}, 0, 1)
 }
 
 1;

@@ -890,7 +890,7 @@ sub _setCommentValue {
     #
     # Push a value for the AST
     #
-    $self->_setAstValue($eslifRecognizerInterface, $eslifRecognizer, 'comment_value', ':discard', 'comment');
+    $self->_setAstValue($eslifRecognizerInterface, $eslifRecognizer, 'comment_value', ':discard', $type);
 }
 
 # ============================================================================
