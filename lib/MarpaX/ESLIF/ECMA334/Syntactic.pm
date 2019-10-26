@@ -3,6 +3,7 @@ use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334::Syntactic;
 use MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface;
+use MarpaX::ESLIF::ECMA334::Syntactic::ValueInterface;
 
 use Log::Any qw/$log/;
 
@@ -101,14 +102,12 @@ Output is an AST of the syntactic parse.
 sub parse {
     my ($self, %options) = @_;
 
+    $log->tracef("[%s] Start", $SYNTACTIC_GRAMMAR->currentDescription);
     #
     # Create recognizer
     #
     my $eslifRecognizerInterface = MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface->new(%options);
-
-    $log->tracef("[%s] Start", $SYNTACTIC_GRAMMAR->currentDescription);
     my $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($SYNTACTIC_GRAMMAR, $eslifRecognizerInterface);
-
     #
     # Start the scan
     #
@@ -116,10 +115,24 @@ sub parse {
     #
     # Resume until we are done
     #
-    while ($self->_resume($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager)) {
+    while (! $eslifRecognizerInterface->isEof) {
+        if (! $self->_resume($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager)) {
+            croak "Resume failed";
+        }
     }
 
+    # -----------------------------------------------------------------------------------------
+    # Call for valuation (we configured value interface to not accept ambiguity nor null parse)
+    # -----------------------------------------------------------------------------------------
+    my $eslifValueInterface = MarpaX::ESLIF::ECMA334::Syntactic::ValueInterface->new();
+
+    croak "Valuation failure" unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
+
+    my $value = $eslifValueInterface->getResult;
+
     $log->tracef("[%s] End", $SYNTACTIC_GRAMMAR->currentDescription);
+
+    return $value
 }
 
 # ============================================================================
@@ -166,57 +179,47 @@ sub _SyntacticEventManager {
     my $rc = 0;
     my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
 
-    $log->tracef("[%s] Events: %s", $SYNTACTIC_GRAMMAR->currentDescription, \@events);
+    my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
+    my @alternatives;
+    my $latm = -1;
+
+    $log->tracef("[%s] Events: %s, nextAstItem type is %s", $SYNTACTIC_GRAMMAR->currentDescription, \@events, defined($nextAstItem) ? $nextAstItem->{type} : 'undef');
     foreach my $event (@events) {
+        my ($match, $name, $value, $length) = (undef, undef, undef, undef, undef);
 
         if ($event eq '^identifier') {
-            my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
-
             if (defined($nextAstItem) && $nextAstItem->{type} eq 'identifier') {
-                $eslifRecognizerInterface->consumeNextAstItem;
-                $log->tracef("[%s] IDENTIFIER: %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextAstItem->{string});
-                $eslifRecognizer->lexemeRead('IDENTIFIER', $nextAstItem->{string}, 0, 1) || croak "IDENTIFIER read failure";
-                $rc = 1;
+                $match = $nextAstItem->{string};
+                $value = $nextAstItem->{string};
+                $name = 'IDENTIFIER';
             }
         }
         elsif ($event eq '^identifier_equal_to_assembly_or_module') {
-            my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
-
             if (defined($nextAstItem) && $nextAstItem->{type} eq 'identifier' && ($nextAstItem->{string} eq 'assembly' || $nextAstItem->{string} eq 'module')) {
-                $eslifRecognizerInterface->consumeNextAstItem;
-                $log->tracef("[%s] IDENTIFIER: %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextAstItem->{string});
-                $eslifRecognizer->lexemeRead('IDENTIFIER', $nextAstItem->{string}, 0, 1) || croak "IDENTIFIER read failure";
-                $rc = 1;
+                $match = $nextAstItem->{string};
+                $value = $nextAstItem->{string};
+                $name = 'IDENTIFIER EQUAL TO ASSEMBLY OR MODULE';
             }
         }
         elsif ($event eq '^identifier_not_equal_to_assembly_or_module') {
-            my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
-
             if (defined($nextAstItem) && $nextAstItem->{type} eq 'identifier' && ($nextAstItem->{string} ne 'assembly' && $nextAstItem->{string} ne 'module')) {
-                $eslifRecognizerInterface->consumeNextAstItem;
-                $log->tracef("[%s] IDENTIFIER: %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextAstItem->{string});
-                $eslifRecognizer->lexemeRead('IDENTIFIER', $nextAstItem->{string}, 0, 1) || croak "IDENTIFIER read failure";
-                $rc = 1;
+                $match = $nextAstItem->{string};
+                $value = $nextAstItem->{string};
+                $name = 'IDENTIFIER NOT EQUAL TO ASSEMBLY OR MODULE';
             }
         }
         elsif ($event eq '^literal') {
-            my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
-
             if (defined($nextAstItem) && $nextAstItem->{type} =~ /\bliteral$/) {
-                $eslifRecognizerInterface->consumeNextAstItem;
-                $log->tracef("[%s] LITERAL (%s): %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextAstItem->{type}, $nextAstItem->{string});
-                $eslifRecognizer->lexemeRead('LITERAL', $nextAstItem->{string}, 0, 1) || croak "LITERAL read failure";
-                $rc = 1;
+                $match = $nextAstItem->{string};
+                $value = $nextAstItem->{string};
+                $name = 'LITERAL';
             }
         }
         elsif ($event eq '^keyword') {
-            my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
-
             if (defined($nextAstItem) && $nextAstItem->{type} eq 'keyword') {
-                $eslifRecognizerInterface->consumeNextAstItem;
-                $log->tracef("[%s] KEYWORD: %s", $SYNTACTIC_GRAMMAR->currentDescription, $nextAstItem->{string});
-                $eslifRecognizer->lexemeRead('KEYWORD', $nextAstItem->{string}, 0, 1) || croak "LITERAL read failure";
-                $rc = 1;
+                $match = $nextAstItem->{string};
+                $value = $nextAstItem->{string};
+                $name = 'KEYWORD';
             }
         }
         elsif ($event eq 'comment$') {
@@ -230,6 +233,28 @@ sub _SyntacticEventManager {
         else {
             croak "Unsupported event $event"
         }
+
+	if (defined($match)) {
+            my $length = bytes::length($match);
+            if ($length >= $latm) {
+                if ($length > $latm) {
+                    @alternatives = ();
+                    $latm = $length;
+                }
+                push(@alternatives, { match => $match, name => $name, value => $value })
+            }
+        }
+    }
+
+    if ($latm >= 0) {
+        map {
+            $log->tracef("[%s] Alternative: <%s> = %s", $SYNTACTIC_GRAMMAR->currentDescription, $_->{name}, $_->{value});
+            croak "Alternative failure" . $_->{name} unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
+        } @alternatives;
+        $eslifRecognizerInterface->consumeNextAstItem;
+        $log->tracef("[%s] Lexeme complete on 0 byte", $SYNTACTIC_GRAMMAR->currentDescription, 0);
+        croak "Lexeme complete failure" unless $eslifRecognizer->lexemeComplete(0);
+        $rc = 1
     }
 
     return $rc;
@@ -341,7 +366,7 @@ __[ syntactic grammar ]__
                                          | 'ref' <variable reference>
                                          | 'out' <variable reference>
 <primary expression>                   ::= <primary no array creation expression>
-                                           <array creation expression>
+                                         | <array creation expression>
 <primary no array creation expression> ::= <literal>
                                          | <simple name>
                                          | <parenthesized expression>

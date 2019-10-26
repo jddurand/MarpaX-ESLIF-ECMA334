@@ -584,7 +584,7 @@ sub _lexicalEventManager {
     my ($identifier_or_keyword, $identifier_or_keyword_match, $identifier_or_keyword_done) = (undef, undef, 0);
     my ($keyword, $keyword_match, $keyword_done) = (undef, undef, 0);
     foreach my $event (@events) {
-        my ($match, $name, $value, $length, $pp_expression) = (undef, undef, undef, undef, undef, undef, undef, undef, undef);
+        my ($match, $name, $value, $length, $pp_expression) = (undef, undef, undef, undef, undef);
 
         if ($event eq "'exhausted'") {
             $eslifRecognizerInterface->hasCompletion(1)

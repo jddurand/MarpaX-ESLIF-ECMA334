@@ -3,7 +3,6 @@ use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface;
 use Carp qw/croak/;
-use Log::Any qw/$log/;
 
 # ABSTRACT: MarpaX::ESLIF::ECMA334 Syntactic Recognizer Interface
 
@@ -45,8 +44,7 @@ sub new {
     return bless
     {
         _lexicalAst => $lexicalAst,
-        _currentAstItem => undef,
-        _eof => 0
+        _currentAstItem => undef
     }, $pkg
 }
 
@@ -68,7 +66,6 @@ sub read {
     my ($self) = @_;
 
     if (! @{$self->{_lexicalAst}}) {
-        $self->{_eof} = 1;
         return 0
     }
 
@@ -89,7 +86,7 @@ Returns a true or a false value, indicating if end-of-data is reached.
 sub isEof {
     my ($self) = @_;
 
-    return $self->{_eof}
+    return !@{$self->{_lexicalAst}}
 }
 
 # ============================================================================
@@ -133,7 +130,6 @@ Returns last bunch of data. Depends on the next value from lexical AST.
 sub data {
     my ($self) = @_;
 
-    $log->tracef('==> "%s"', $self->{_currentAstItem}->{string});
     return $self->{_currentAstItem}->{string} # Whatever the type, next data always have a string form
 }
 
@@ -222,7 +218,7 @@ Returns the next structured item from lexical AST.
 sub nextAstItem {
     my ($self) = @_;
 
-    return $self->{_eof} ? undef : $self->{_lexicalAst}->[0]
+    return @{$self->{_lexicalAst}} ? $self->{_lexicalAst}->[0] : undef
 }
 
 # ============================================================================
@@ -238,7 +234,6 @@ Consumes the next structured item from lexical AST.
 sub consumeNextAstItem {
     my ($self) = @_;
 
-    $log->tracef('... "%s"', $self->{_lexicalAst}->[0]->{string});
     splice(@{$self->{_lexicalAst}}, 0, 1)
 }
 
