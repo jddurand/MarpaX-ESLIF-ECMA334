@@ -168,7 +168,7 @@ __[004 ok / pre-processing ]_
 namespace Megacorp.Data
 {
 #if Advanced
-class PivotTable {...}
+class PivotTable {...} // ... is not valid from syntactic grammar point of view, but is ok from lexical point of view
 #endif
 }
 __[005 ko / pre-processing: #define after any token ]_
@@ -300,3 +300,8 @@ __[020 ok / #pragma text ]__
    #    pragma Using MEDIUM MATHEMATICAL SPACE
      #    pragma      Using OGHAM SPACE MARK
 __[021 ok / null parse ]__
+__[022 ok / grammar ambiguity from syntactic point of view, not from lexical point of view ]__
+class test
+{
+  F(G<A, B>(7));
+}
