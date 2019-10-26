@@ -63,6 +63,7 @@ sub new {
     my ($pkg, %options) = @_;
 
     my $definitions = delete($options{definitions}) // {};
+    my $input = delete($options{input}) // '';
     croak 'definitions must be a HASH reference' unless ((ref($definitions) // '') eq 'HASH');
     foreach (sort keys %{$definitions}) {
         croak "$_ definition must be a MarpaX::ESLIF boolean" unless MarpaX::ESLIF::is_bool($definitions->{$_})
@@ -74,6 +75,7 @@ sub new {
              hasCompletion => 0,
              recurseLevel => 0,
              definitions => $definitions,
+             input => $input,
              %options
          },
          $pkg)

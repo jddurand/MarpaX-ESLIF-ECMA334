@@ -254,7 +254,8 @@ sub _preparse {
     my $encoding = delete($options{encoding}); # Can be undef
 
     my $output = $input;
-    if (bytes::length($input)) {
+    my $inputLength = bytes::length($input);
+    if ($inputLength) {
         #
         # Pre-parse: we require this is a valid source file from encoding point of view
         #
@@ -277,6 +278,9 @@ sub _preparse {
         $output .= "\x{000D}" if (bytes::length($output) > 0 && $output !~ /[\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]$/);
     }
 
+    my $outputLength = bytes::length($output);
+
+    $log->tracef("_preparse: inputLength=%d, outputLength=%d", $inputLength, $outputLength);
     return $output # Always UTF-8 if not empty
 }
 
@@ -309,7 +313,8 @@ sub _parse {
     if (! defined($eslifRecognizer->input)) {
         $eslifRecognizer->read || $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'Initial read failed')
     }
-    my $initialLength = bytes::length($eslifRecognizer->input);
+    my $initialLength = bytes::length($eslifRecognizer->input) // 0;
+    $log->tracef("[%d] %s: initialLength=%s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $initialLength);
 
     # -----------------------------------------------------
     # Run recognizer manually so that events are accessible
@@ -339,7 +344,7 @@ sub _parse {
     # -------------------------------
     # Return the length and the value
     # -------------------------------
-    my $finalLength = bytes::length($eslifRecognizer->input // '');
+    my $finalLength = bytes::length($eslifRecognizer->input) // 0;
     my $length = $initialLength - $finalLength;
     my $match = bytes::substr($eslifRecognizerInterface->data, 0, $length);
     my $value = $eslifValueInterface->getResult;
@@ -596,25 +601,25 @@ sub _lexicalEventManager {
             $eslifRecognizerInterface->hasCompletion(1)
         }
         elsif ($event eq 'identifier$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'identifier');
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'identifier');
         }
         elsif ($event eq 'keyword$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'keyword');
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'keyword');
         }
         elsif ($event eq 'integer_literal$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'integer literal');
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'integer literal');
         }
         elsif ($event eq 'real_literal$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'real literal');
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'real literal');
         }
         elsif ($event eq 'character_literal$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'character literal');
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'character literal');
         }
         elsif ($event eq 'string_literal$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'string literal');
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'string literal');
         }
         elsif ($event eq 'operator_or_punctuator$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifRecognizer, 'operator or punctuator');
+            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'operator or punctuator');
         }
         elsif ($event eq 'pp_declaration_define$') {
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::true
@@ -623,6 +628,7 @@ sub _lexicalEventManager {
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::false
         }
         elsif ($event eq 'PP_DEFINE$') {
+            $log->tracef("[%d] %s: has_token: %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $self->{has_token});
             $self->_exception($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'A #define declaration must appear before any token') if $self->{has_token};
         }
         elsif ($event eq 'PP_UNDEF$') {
@@ -863,10 +869,11 @@ sub _lexicalEventManager {
 # _setTokenValue
 # ============================================================================
 sub _setTokenValue {
-    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $type) = @_;
+    my ($self, $eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, $type) = @_;
     #
     # This boolean is used in #define and #undef events
     #
+    $log->tracef("[%d] %s: Token of type %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $type);
     $self->{has_token} = 1 if ! $eslifRecognizerInterface->recurseLevel;
     #
     # Push a value for the AST

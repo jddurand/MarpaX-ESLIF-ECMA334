@@ -39,7 +39,6 @@ diag("###########################################################");
 diag("Inline data");
 diag("###########################################################");
 foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAGE__->section_data_names) {
-    next unless $_ =~ /002/;
     my $want_ok = ($_ =~ /^[0-9]+\s*ok/);
     my $want_ko = ($_ =~ /^[0-9]+\s*ko/);
     #
@@ -60,7 +59,7 @@ sub do_test {
 
     my $lexicalAst;
     try {
-        $lexicalAst = $lexicalParser->parse(%options);
+        $lexicalAst = MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options);
     } catch {
         $lexicalAst = undef;
         if ($_->$_isa('MarpaX::ESLIF::ECMA334::Lexical::Exception')) {
@@ -300,3 +299,4 @@ __[020 ok / #pragma text ]__
   #  pragma With Text No Space After
    #    pragma Using MEDIUM MATHEMATICAL SPACE
      #    pragma      Using OGHAM SPACE MARK
+__[021 ok / null parse ]__

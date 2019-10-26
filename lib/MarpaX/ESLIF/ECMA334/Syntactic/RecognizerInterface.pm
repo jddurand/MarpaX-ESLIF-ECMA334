@@ -3,6 +3,7 @@ use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface;
 use Carp qw/croak/;
+use Log::Any qw/$log/;
 
 # ABSTRACT: MarpaX::ESLIF::ECMA334 Syntactic Recognizer Interface
 
@@ -39,7 +40,7 @@ Instantiate a new recognizer interface object.
 sub new {
     my ($pkg, %options) = @_;
 
-    my $lexicalAst = $options{lexicalAst} // croak 'Undefined lexical AST';
+    my $lexicalAst = delete($options{lexicalAst}) // croak 'Undefined lexical AST';
 
     return bless
     {
@@ -66,10 +67,12 @@ sub read {
     my ($self) = @_;
 
     if (! @{$self->{_lexicalAst}}) {
+        $log->tracef('%s::read: return 0', __PACKAGE__);
         return 0
     }
 
     $self->{_currentAstItem} = shift @{$self->{_lexicalAst}};
+    $log->tracef('%s::read: return 1', __PACKAGE__);
     return 1;
 }
 
@@ -86,7 +89,9 @@ Returns a true or a false value, indicating if end-of-data is reached.
 sub isEof {
     my ($self) = @_;
 
-    return !@{$self->{_lexicalAst}}
+    my $rc = !@{$self->{_lexicalAst}};
+    $log->tracef('%s::isEof: return %d', __PACKAGE__, $rc);
+    return $rc
 }
 
 # ============================================================================
@@ -130,11 +135,16 @@ Returns last bunch of data. Depends on the next value from lexical AST.
 sub data {
     my ($self) = @_;
 
-    if ($self->{_currentAstItem}->{type} eq 'pragma text') {
-        return '#pragma ' . $self->{_currentAstItem}->{string}
-    } else {
-        return $self->{_currentAstItem}->{string}
-    }
+    my $rc =
+        ($self->{_currentAstItem}->{type} eq 'pragma text')
+        ?
+        sprintf("#pragma %s\n", $self->{_currentAstItem}->{string})
+        :
+        $self->{_currentAstItem}->{string}
+    ;
+
+    $log->tracef('%s::data: return "%s"', __PACKAGE__, $rc);
+    return $rc
 }
 
 # ============================================================================

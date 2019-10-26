@@ -2,10 +2,9 @@ use strict;
 use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334::Syntactic;
+use Log::Any qw/$log/;
 use MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface;
 use MarpaX::ESLIF::ECMA334::Syntactic::ValueInterface;
-
-use Log::Any qw/$log/;
 
 # ABSTRACT: C# syntactic parse as per Standard ECMA-334 5th Edition
 
@@ -224,11 +223,11 @@ sub _SyntacticEventManager {
         }
         elsif ($event eq 'comment$') {
             my $comment = $eslifRecognizer->discardLast();
-            $log->tracef("[%s] %s: comment: %s", $SYNTACTIC_GRAMMAR->currentDescription, $comment);
+            $log->tracef("[%s] Comment: %s", $SYNTACTIC_GRAMMAR->currentDescription, $comment);
         }
         elsif ($event eq 'pragma_text$') {
             my $pragma = $eslifRecognizer->discardLast();
-            $log->tracef("[%s] %s: #pragma: %s", $SYNTACTIC_GRAMMAR->currentDescription, $pragma);
+            $log->tracef("[%s] Pragma with text: %s", $SYNTACTIC_GRAMMAR->currentDescription, $pragma);
         }
         else {
             croak "Unsupported event $event"

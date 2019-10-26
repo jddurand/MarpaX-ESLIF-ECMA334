@@ -104,7 +104,7 @@ Returns a true or a false value, indicating if valuation should allow a null par
 
 =cut
 
-sub isWithNull         { return 0 }  # Allow null parse ?
+sub isWithNull         { return 1 }  # Allow null parse ?
 
 # ============================================================================
 # maxParses
