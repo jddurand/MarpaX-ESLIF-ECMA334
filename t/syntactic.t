@@ -39,7 +39,7 @@ diag("###########################################################");
 diag("Inline data");
 diag("###########################################################");
 foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAGE__->section_data_names) {
-    next unless $_ =~ /^020 /;
+    next unless $_ =~ /^011 /;
     my $want_ok = ($_ =~ /^[0-9]+\s*ok/);
     my $want_ko = ($_ =~ /^[0-9]+\s*ko/);
     #
@@ -137,7 +137,7 @@ __[004 ok / pre-processing ]_
 namespace Megacorp.Data
 {
 #if Advanced
-class PivotTable {...}
+class PivotTable {}
 #endif
 }
 __[005 ko / pre-processing: #define after any token ]_
@@ -207,8 +207,21 @@ __[010 ok / pre-processing special case ]__
 /* */ class Q { }
 #endif
 __[011 ok / verbatim identifier ]__
-class Class1 {
-  cl\u0061ss.st\u0061tic(true);
+class @class
+{
+	public static void @static(bool @bool) {
+		if (@bool)
+			System.Console.WriteLine("true");
+		else
+			System.Console.WriteLine("false");
+		}
+}
+
+class Class1
+{
+	static void M() {
+		cl\u0061ss.st\u0061tic(true);
+	}
 }
 __[012 ko / Missing #endif ]__
 class test
@@ -269,3 +282,8 @@ __[020 ok / #pragma text ]__
    #    pragma Using MEDIUM MATHEMATICAL SPACE
      #    pragma      Using OGHAM SPACE MARK
 __[021 ok / null parse ]__
+__[022 ok / grammar ambiguity from syntactic point of view, not from lexical point of view ]__
+class test
+{
+  F(G<A, B>(7));
+}
