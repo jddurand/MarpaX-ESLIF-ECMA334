@@ -96,6 +96,29 @@ Output is an AST of the syntactic parse.
 # - "operator or punctuator"        Standard input
 # - "comment"                       :discard
 # - "pragma text"                   :discard
+#
+# Note that there is a subtil confusion between lexical and syntactic grammars:
+#
+# Lexical grammar defines literals to be:
+# <literal>                                        ::= <boolean literal>            # Will be in <keyword>!
+#                                                    | <integer literal>
+#                                                    | <real literal>
+#                                                    | <character literal>
+#                                                    | <string literal>
+#                                                    | <null literal>               # Will be in <keyword>!
+#
+# but a <token> is:
+#
+# <token>                                          ::= <identifier>
+#                                                    | <keyword>                    # Will contain 'true', 'false' and 'null'!
+#                                                    | <integer literal>
+#                                                    | <real literal>
+#                                                    | <character literal>
+#                                                    | <string literal>
+#                                                    | <operator or punctuator>
+#
+# Therefore a <token> as seen by the syntactic grammar is in fact a literal if its value 'true', 'false' or 'null'
+#
 # --------------------------------------------------------------------------
 #
 sub parse {
@@ -106,31 +129,38 @@ sub parse {
     # Create recognizer
     #
     my $eslifRecognizerInterface = MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface->new(%options);
-    my $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($SYNTACTIC_GRAMMAR, $eslifRecognizerInterface);
     #
-    # Start the scan
+    # If it totally empty: no op
     #
-    $self->_scan($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager);
-    #
-    # Resume until we are done
-    #
-    while (! $eslifRecognizerInterface->isEof) {
-        if (! $self->_resume($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager)) {
-            croak "Resume failed";
+    my $value;
+    if (! defined($eslifRecognizerInterface->nextAstItem)) {
+        $value = undef;
+    } else {
+        my $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($SYNTACTIC_GRAMMAR, $eslifRecognizerInterface);
+        #
+        # Start the scan
+        #
+        $self->_scan($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager);
+        #
+        # Resume until we are done
+        #
+        while (! $eslifRecognizerInterface->isEof) {
+            if (! $self->_resume($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager)) {
+                croak "Resume failed";
+            }
         }
+
+        # -----------------------------------------------------------------------------------------
+        # Call for valuation (we configured value interface to not accept ambiguity nor null parse)
+        # -----------------------------------------------------------------------------------------
+        my $eslifValueInterface = MarpaX::ESLIF::ECMA334::Syntactic::ValueInterface->new();
+
+        croak "Valuation failure" unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
+
+        $value = $eslifValueInterface->getResult;
     }
 
-    # -----------------------------------------------------------------------------------------
-    # Call for valuation (we configured value interface to not accept ambiguity nor null parse)
-    # -----------------------------------------------------------------------------------------
-    my $eslifValueInterface = MarpaX::ESLIF::ECMA334::Syntactic::ValueInterface->new();
-
-    croak "Valuation failure" unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
-
-    my $value = $eslifValueInterface->getResult;
-
     $log->tracef("[%s] End", $SYNTACTIC_GRAMMAR->currentDescription);
-
     return $value
 }
 
@@ -157,10 +187,12 @@ sub _resume {
 
     $log->tracef("[%s] Resume", $SYNTACTIC_GRAMMAR->currentDescription);
     my $rc = $eslifRecognizer->resume;
-    #
-    # Resume can generate events, even in case of failure
-    #
-    while ($self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)) {
+    if ($rc) {
+        #
+        # Resume can generate events, even in case of failure
+        #
+        while ($self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)) {
+        }
     }
 
     return $rc
@@ -213,6 +245,17 @@ sub _SyntacticEventManager {
                 $value = $nextAstItem->{string};
                 $name = 'LITERAL';
             }
+            elsif (defined($nextAstItem) && $nextAstItem->{type} eq 'keyword') {
+                $value = $nextAstItem->{string};
+                #
+                # There is quite a confusion between what is injected by lexical
+                # grammar and the notion of literal for 'true', 'false' and 'null'
+                #
+                if ($value eq 'true' || $value eq 'false' || $value eq 'null') {
+                    $name = 'LITERAL';
+                    $match = $nextAstItem->{string};
+                }
+            }
         }
         elsif ($event eq '^keyword') {
             if (defined($nextAstItem) && $nextAstItem->{type} eq 'keyword') {
@@ -254,6 +297,8 @@ sub _SyntacticEventManager {
         $log->tracef("[%s] Lexeme complete on 0 byte", $SYNTACTIC_GRAMMAR->currentDescription, 0);
         croak "Lexeme complete failure" unless $eslifRecognizer->lexemeComplete(0);
         $rc = 1
+    } else {
+        $log->tracef("[%s] No alternative injected", $SYNTACTIC_GRAMMAR->currentDescription);
     }
 
     return $rc;
@@ -318,13 +363,13 @@ __[ syntactic grammar ]__
 <value type>                           ::= <struct type>
                                          | <enum type>
 <struct type>                          ::= <type name>
-                                           <simple type>
-                                           <nullable type>
+                                         | <simple type>
+                                         | <nullable type>
 <simple type>                          ::= <numeric type>
                                          | 'bool'
 <numeric type>                         ::= <integral type>
-                                           <floating point type>
-                                           'decimal'
+                                         | <floating point type>
+                                         | 'decimal'
 <integral type>                        ::= 'sbyte'
                                          | 'byte'
                                          | 'short'
@@ -779,7 +824,7 @@ __[ syntactic grammar ]__
                                          | <attributes opt> <class modifiers opt> <partial opt> 'class' <identifier> <type parameter list opt> <class base opt> <type parameter constraints clauses opt> <class body>
 <attributes opt>                       ::= <attributes>
 <attributes opt>                       ::=
-<class modifiers opt>                  ::= <class modifiers opt>
+<class modifiers opt>                  ::= <class modifiers>
 <class modifiers opt>                  ::=
 <partial opt>                          ::= 'partial'
 <partial opt>                          ::=
