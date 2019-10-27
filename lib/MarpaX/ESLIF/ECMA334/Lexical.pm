@@ -377,10 +377,12 @@ sub _resume {
 
     $log->tracef("[%d] %s: Resume on %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, bytes::length($eslifRecognizer->input // ''));
     my $rc = $eslifRecognizer->resume;
-    #
-    # Resume can generate events, even in case of failure
-    #
-    while ($self->$eventManager($eslifGrammar, $eslifRecognizer, $eslifRecognizerInterface)) {
+    if ($rc) {
+        #
+        # Resume can generate events, even in case of failure
+        #
+        while ($self->$eventManager($eslifGrammar, $eslifRecognizer, $eslifRecognizerInterface)) {
+        }
     }
 
     return $rc
