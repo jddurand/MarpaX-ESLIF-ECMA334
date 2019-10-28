@@ -99,7 +99,7 @@ Output is an AST of the syntactic parse.
 #
 # Note that there is a subtil confusion between lexical and syntactic grammars:
 #
-# Lexical grammar defines literals to be:
+# Syntactic grammar defines <literal> as:
 # <literal>                                        ::= <boolean literal>            # Will be in <keyword>!
 #                                                    | <integer literal>
 #                                                    | <real literal>
@@ -107,7 +107,7 @@ Output is an AST of the syntactic parse.
 #                                                    | <string literal>
 #                                                    | <null literal>               # Will be in <keyword>!
 #
-# but a <token> is:
+# but a <literal> per-se is NEVER reached by lexical grammar. Instead it contains <token> that is:
 #
 # <token>                                          ::= <identifier>
 #                                                    | <keyword>                    # Will contain 'true', 'false' and 'null'!
@@ -117,7 +117,15 @@ Output is an AST of the syntactic parse.
 #                                                    | <string literal>
 #                                                    | <operator or punctuator>
 #
-# Therefore a <token> as seen by the syntactic grammar is in fact a literal if its value 'true', 'false' or 'null'
+# Therefore a <token> exposed by the lexical grammar can have two significations in the syntactic grammar
+# when it is 'true', 'false' or 'null':
+# - a <boolean literal> or <null literal>, respectively
+# - a <keyword>
+#
+# What happens is:
+# - If the syntactic grammar expects a <literal> and current <token> is 'true', 'false' or 'null', corresponding literal is injected
+# - If the syntactic grammar expects a <keyword>, the later is injected regardless of its value
+# It is grammar itself that will select the one that corresponds to the correct lexeme depending on the context.
 #
 # --------------------------------------------------------------------------
 #
@@ -248,8 +256,7 @@ sub _SyntacticEventManager {
             elsif (defined($nextAstItem) && $nextAstItem->{type} eq 'keyword') {
                 $value = $nextAstItem->{string};
                 #
-                # There is quite a confusion between what is injected by lexical
-                # grammar and the notion of literal for 'true', 'false' and 'null'
+                # Lexical grammar exposes 'true, 'false' and 'null' as a keyword.
                 #
                 if ($value eq 'true' || $value eq 'false' || $value eq 'null') {
                     $name = 'LITERAL';
