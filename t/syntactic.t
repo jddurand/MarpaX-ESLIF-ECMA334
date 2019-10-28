@@ -39,7 +39,7 @@ diag("###########################################################");
 diag("Inline data");
 diag("###########################################################");
 foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAGE__->section_data_names) {
-    next unless $_ =~ /^011 /;
+    # next unless $_ =~ /^023 /;
     my $want_ok = ($_ =~ /^[0-9]+\s*ok/);
     my $want_ko = ($_ =~ /^[0-9]+\s*ko/);
     #
@@ -286,4 +286,9 @@ __[022 ok / grammar ambiguity from syntactic point of view, not from lexical poi
 class test
 {
   F(G<A, B>(7));
+}
+__[023 ok / boolean literal is a keyword in lexical grammar, may be a literal or keyword in syntactic grammar ]__
+class Class1
+{
+  object x = true;
 }
