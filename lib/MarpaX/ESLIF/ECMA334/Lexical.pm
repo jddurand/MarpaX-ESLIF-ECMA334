@@ -744,14 +744,16 @@ sub _lexicalEventManager {
         elsif ($event eq '^available_identifier') {
             if (! $identifier_or_keyword_done) {
                 ($identifier_or_keyword, $identifier_or_keyword_match) = $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                $log->tracef("[%d] %s: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'identifier or keyword', $identifier_or_keyword_match);
                 $identifier_or_keyword_done = 1;
             }
             if (defined($identifier_or_keyword)) {
                 if (! $keyword_done) {
                     ($keyword, $keyword_match) = $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                    $log->tracef("[%d] %s: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'keyword', $keyword_match);
                     $keyword_done = 1;
                 }
-                if (! defined($keyword)) {
+                if ((! defined($keyword)) || ($identifier_or_keyword ne $keyword)) {
                     $match = $identifier_or_keyword_match;
                     $value = $identifier_or_keyword;
                     $name = 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD'
@@ -766,6 +768,7 @@ sub _lexicalEventManager {
         elsif ($event eq '^keyword') {
             if (! $keyword_done) {
                 ($keyword, $keyword_match) = $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                $log->tracef("[%d] %s: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'keyword', $keyword_match);
                 $keyword_done = 1;
             }
             if (defined($keyword)) {
@@ -777,6 +780,7 @@ sub _lexicalEventManager {
         elsif ($event eq '^identifier_or_keyword') {
             if (! $identifier_or_keyword_done) {
                 ($identifier_or_keyword, $identifier_or_keyword_match) = $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                $log->tracef("[%d] %s: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'identifier or keyword', $identifier_or_keyword_match);
                 $identifier_or_keyword_done = 1;
             }
             if (defined($identifier_or_keyword)) {
@@ -788,6 +792,7 @@ sub _lexicalEventManager {
         elsif ($event eq '^conditional_symbol') {
             if (! $identifier_or_keyword_done) {
                 ($identifier_or_keyword, $identifier_or_keyword_match) = $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
+                $log->tracef("[%d] %s: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'identifier or keyword', $identifier_or_keyword_match);
                 $identifier_or_keyword_done = 1;
             }
             if (defined($identifier_or_keyword)) {
@@ -821,12 +826,29 @@ sub _lexicalEventManager {
 
 	if (defined($match)) {
             my $length = bytes::length($match);
-            if ($length >= $latm) {
-                if ($length > $latm) {
+            if ($latm < 0) {
+                #
+                # First alternative
+                #
+                $latm = $length;
+                push(@alternatives, { match => $match, name => $name, value => $value });
+                $log->tracef("[%d] %s: Pushed first alternative: %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $alternatives[-1]);
+            } else {
+                if ($length == $latm) {
+                    #
+                    # Alternative of same length
+                    #
+                    push(@alternatives, { match => $match, name => $name, value => $value });
+                    $log->tracef("[%d] %s: Pushed alternative: %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $alternatives[-1]);
+                } elsif ($length > $latm) {
+                    #
+                    # Alternative of bigger length
+                    #
                     @alternatives = ();
                     $latm = $length;
+                    push(@alternatives, { match => $match, name => $name, value => $value });
+                    $log->tracef("[%d] %s: Resetted alternatives to: %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $alternatives[-1]);
                 }
-                push(@alternatives, { match => $match, name => $name, value => $value })
             }
         }
     }
