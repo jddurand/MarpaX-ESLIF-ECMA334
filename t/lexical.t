@@ -330,3 +330,8 @@ class test
 {
   F(G<A, B>(7));
 }
+__[023 ok / right-shift is not productive in lexical grammar ]__
+class test
+{
+  unsigned short short13 = short11 >> 10;
+}
