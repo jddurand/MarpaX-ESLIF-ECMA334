@@ -92,14 +92,26 @@ sub do_test {
 done_testing();
 
 __DATA__
-__[ 001 ok / unicode characters ]__
+__[ 001 ok / string and character literals ]__
 // A Hello World! program in C#.
 using System;
 {
-    string swedishumlaut = "Å"; // U+00C5
-    string angstromsign = "Å"; // U+212B
-    string money = "€"; // U+20AC
-    string sameThing = "\u20AC";
+    string string_literal_swedishumlaut = "Å"; // U+00C5
+    string string_literal_angstromsign = "Å"; // U+212B
+    string string_literal_money = "€"; // U+20AC
+    string string_literal_simple_escape_sequences = "\'\"\\\0\a\b\f\n\r\t\v";
+    string string_literal_sameThing = "\u20AC";
+    string character_literal_single_quote = '\'';
+    string character_literal_double_quote = '\"';
+    string character_literal_backslash = '\\';
+    string character_literal_null = '\0';
+    string character_literal_alert = '\a';
+    string character_literal_backspace = '\b';
+    string character_literal_form_feed = '\f';
+    string character_literal_new_line = '\n';
+    string character_literal_carriage_return = '\r';
+    string character_literal_horizontal_tab = '\t';
+    string character_literal_vertical_tab = '\v';
 }
 __[002 ok / example ]__
 using System;
