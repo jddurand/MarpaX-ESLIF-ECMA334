@@ -364,6 +364,22 @@ sub whitespace {
 }
 
 # ============================================================================
+# pp_pragma
+# ============================================================================
+
+=head3 pp_pragma($self, $PP_PRAGMA, $pp_pragma_text)
+
+Action for pp pragma rule. Returns a hash C<{ type => 'pragma', value => $pp_pragma_text}> reference.
+
+=cut
+
+sub pp_pragma {
+    my ($self, $PP_PRAGMA, $pp_pragma_text) = @_;
+
+    return { type => 'pragma', value => $pp_pragma_text }
+}
+
+# ============================================================================
 # push_input_element
 # ============================================================================
 

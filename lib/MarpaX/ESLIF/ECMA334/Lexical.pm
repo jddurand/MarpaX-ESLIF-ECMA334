@@ -726,13 +726,13 @@ sub _lexicalEventManager {
         elsif ($event eq '^available_identifier') {
             if (! $identifier_or_keyword_done) {
                 ($identifier_or_keyword, $identifier_or_keyword_match) = $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
-                $log->tracef("[%d] %s: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'identifier or keyword', $identifier_or_keyword_match);
+                $log->tracef("[%d] %s: <%s> = %s (match on: %s)", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'identifier or keyword', $identifier_or_keyword, $identifier_or_keyword_match);
                 $identifier_or_keyword_done = 1;
             }
             if (defined($identifier_or_keyword)) {
                 if (! $keyword_done) {
                     ($keyword, $keyword_match) = $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
-                    $log->tracef("[%d] %s: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'keyword', $keyword_match);
+                    $log->tracef("[%d] %s: <%s> = %s (match on: %s)", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'keyword', $keyword, $keyword_match);
                     $keyword_done = 1;
                 }
                 if ((! defined($keyword)) || ($identifier_or_keyword ne $keyword)) {
@@ -750,7 +750,7 @@ sub _lexicalEventManager {
         elsif ($event eq '^keyword') {
             if (! $keyword_done) {
                 ($keyword, $keyword_match) = $self->_keyword($eslifRecognizer, $eslifRecognizerInterface);
-                $log->tracef("[%d] %s: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'keyword', $keyword_match);
+                $log->tracef("[%d] %s: <%s> = %s (match on: %s)", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'keyword', $keyword, $keyword_match);
                 $keyword_done = 1;
             }
             if (defined($keyword)) {
@@ -762,7 +762,7 @@ sub _lexicalEventManager {
         elsif ($event eq '^identifier_or_keyword') {
             if (! $identifier_or_keyword_done) {
                 ($identifier_or_keyword, $identifier_or_keyword_match) = $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
-                $log->tracef("[%d] %s: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'identifier or keyword', $identifier_or_keyword_match);
+                $log->tracef("[%d] %s: <%s> = %s (match on: %s)", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'identifier or keyword', $identifier_or_keyword, $identifier_or_keyword_match);
                 $identifier_or_keyword_done = 1;
             }
             if (defined($identifier_or_keyword)) {
@@ -774,7 +774,7 @@ sub _lexicalEventManager {
         elsif ($event eq '^conditional_symbol') {
             if (! $identifier_or_keyword_done) {
                 ($identifier_or_keyword, $identifier_or_keyword_match) = $self->_identifier_or_keyword($eslifRecognizer, $eslifRecognizerInterface);
-                $log->tracef("[%d] %s: <%s> = %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'identifier or keyword', $identifier_or_keyword_match);
+                $log->tracef("[%d] %s: <%s> = %s (match on: %s)", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'identifier or keyword', $identifier_or_keyword, $identifier_or_keyword_match);
                 $identifier_or_keyword_done = 1;
             }
             if (defined($identifier_or_keyword)) {
@@ -787,7 +787,8 @@ sub _lexicalEventManager {
             }
         }
         elsif ($event eq '^pp_expression') {
-            $pp_expression //= $self->_pp_expression($eslifRecognizer, $eslifRecognizerInterface);
+            my ($pp_expression, $pp_expression_match) = $self->_pp_expression($eslifRecognizer, $eslifRecognizerInterface);
+            $log->tracef("[%d] %s: <%s> = %s (match on: %s)", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, 'pp expression', $pp_expression, $pp_expression_match);
             #
             # Remember the last expression, and send a zero-length token into <PP EXPRESSION>
             # because _pp_expression() shared to stream with our recognizer: our position is already
@@ -965,7 +966,7 @@ __[ lexical grammar ]__
 <input section opt>                              ::= <input section>                 action => ::undef
 <input section>                                  ::= <input section part>+           action => ::undef
 <input section part>                             ::= <input elements opt> <new line> action => ::undef
-                                                    | <pp directive>                 action => ::undef
+                                                    | <pp directive>                 action => push_input_element
 <input elements opt>                             ::=                                 action => ::undef
 <input elements opt>                             ::= <input elements>                action => ::undef
 <input elements>                                 ::= <input element>+                action => ::undef
@@ -1226,12 +1227,12 @@ event ^keyword = predicted <keyword>
 event :discard[on] = completed <pp new line>
 event :discard[on] = completed <pp diagnostic>
 
-<pp directive>                                   ::= <pp declaration>
-                                                   | <pp conditional>
-                                                   | <pp line>
-                                                   | <pp diagnostic>
-                                                   | <pp region>
-                                                   | <pp pragma>
+<pp directive>                                   ::= <pp declaration>             action => ::undef
+                                                   | <pp conditional>             action => ::undef
+                                                   | <pp line>                    action => ::undef
+                                                   | <pp diagnostic>              action => ::undef
+                                                   | <pp region>                  action => ::undef
+                                                   | <pp pragma>                  action => ::shift
 
 event ^conditional_symbol = predicted <conditional symbol>
 <conditional symbol>                             ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
@@ -1353,10 +1354,10 @@ event ^pp_line_indicator = predicted <line indicator>
 <file name character>                            ::= /[^\x{0022}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY INPUT CHARACTER EXCEPT 0022 AND NEW LINE CHARACTER>
 
 event pp_pragma_with_text[] = nulled <pp pragma with text>
-<pp pragma>                                      ::= <PP PRAGMA> <pp pragma text>
-<pp pragma text>                                 ::= <new line>
-                                                   | <whitespace> <input characters> <new line> <pp pragma with text> # Only #pragma's text with a not-nullable text are of interest
-                                                   | <whitespace> <new line>
+<pp pragma>                                      ::= <PP PRAGMA> <pp pragma text>                                     action => pp_pragma
+<pp pragma text>                                 ::= <new line>                                                       action => ::undef
+                                                   | <whitespace> <input characters> <new line> <pp pragma with text> action => ::copy[1] # Only #pragma's text with a not-nullable text are of interest
+                                                   | <whitespace> <new line>                                          action => ::undef
 <pp pragma with text>                            ::=
 
 #
