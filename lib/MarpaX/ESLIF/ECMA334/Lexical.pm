@@ -596,32 +596,14 @@ sub _lexicalEventManager {
         if ($event eq "'exhausted'") {
             $eslifRecognizerInterface->hasCompletion(1)
         }
+        elsif ($event eq 'token$') {
+            $self->{has_token} = 1
+        }
         elsif ($event eq 'pp_expression$') {
             $eslifRecognizerInterface->hasCompletion(1)
         }
         elsif ($event eq 'identifier_or_keyword$') {
             $eslifRecognizerInterface->hasCompletion(1)
-        }
-        elsif ($event eq 'identifier$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'identifier');
-        }
-        elsif ($event eq 'keyword$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'keyword');
-        }
-        elsif ($event eq 'integer_literal$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'integer literal');
-        }
-        elsif ($event eq 'real_literal$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'real literal');
-        }
-        elsif ($event eq 'character_literal$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'character literal');
-        }
-        elsif ($event eq 'string_literal$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'string literal');
-        }
-        elsif ($event eq 'operator_or_punctuator$') {
-            $self->_setTokenValue($eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, 'operator or punctuator');
         }
         elsif ($event eq 'pp_declaration_define$') {
             $eslifRecognizerInterface->definitions->{$self->{last_conditional_symbol}} = $MarpaX::ESLIF::true
@@ -890,30 +872,6 @@ sub _lexicalEventManager {
 }
 
 # ============================================================================
-# _setTokenValue
-# ============================================================================
-sub _setTokenValue {
-    my ($self, $eslifRecognizerInterface, $eslifGrammar, $eslifRecognizer, $type) = @_;
-    #
-    # This boolean is used in #define and #undef events
-    #
-    $log->tracef("[%d] %s: Token of type %s", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $type);
-    $self->{has_token} = 1 if ! $eslifRecognizerInterface->recurseLevel;
-    #
-    # Push a value for the AST
-    #
-    $self->_setAstValue($eslifRecognizerInterface, $eslifRecognizer, 'token_value', 'token', $type);
-    #
-    # We know what values we inject, and made sure the corresponding events are injecting the correct values
-    # for last line, _line and column start
-    #
-    my $lastAstValue = $self->{lexical_ast}->[-1];
-    $lastAstValue->{line_start} = $self->{token_value_last_line_start};
-    $lastAstValue->{_line_start} = $self->{token_value_last__line_start};
-    $lastAstValue->{column_start} = $self->{token_value_last_column_start};
-}
-
-# ============================================================================
 # _setCommentValue
 # ============================================================================
 sub _setCommentValue {
@@ -991,7 +949,7 @@ __[ lexical grammar ]__
 # ############################################################################################################
 # Lexical Grammar
 # ############################################################################################################
-:default                                         ::= action => ::undef symbol-action => ::undef
+:default                                         ::= action => ::convert[UTF-8]
 :desc                                            ::= 'Lexical grammar'
 :discard                                         ::= <comment> event => comment$
 
@@ -1002,22 +960,26 @@ __[ lexical grammar ]__
 :terminal ::= '"'  pause => after event => :discard[switch]           # Disable comment in regular string literal
 :terminal ::= '@"' pause => after event => :discard[switch]           # Disable comment in verbatim string literal (Note that it ends with '"' character)
 
-<input>                                          ::= <input section opt>          action => inputAction
-<input section opt>                              ::=
-<input section opt>                              ::= <input section>
-<input section>                                  ::= <input section part>+
-<input section part>                             ::= <input elements opt> <new line>
-                                                    | <pp directive>
-<input elements opt>                             ::=
-<input elements opt>                             ::= <input elements>
-<input elements>                                 ::= <input element>+
-<input element>                                  ::= <whitespace>
-                                                   | <token>
+<input>                                          ::= <input section opt>             action => input
+<input section opt>                              ::=                                 action => ::undef
+<input section opt>                              ::= <input section>                 action => ::undef
+<input section>                                  ::= <input section part>+           action => ::undef
+<input section part>                             ::= <input elements opt> <new line> action => ::undef
+                                                    | <pp directive>                 action => ::undef
+<input elements opt>                             ::=                                 action => ::undef
+<input elements opt>                             ::= <input elements>                action => ::undef
+<input elements>                                 ::= <input element>+                action => ::undef
+#
+# We add a zero-length lexeme element everytime a <token> rule matches
+#
+<input element>                                  ::= <whitespace>                    action => push_input_element
+                                                   | <token>                         action => push_input_element
+event token$ = completed <token>
 
 :lexeme ::= <NEW LINE> pause => after event => NEW_LINE$           # Increments current line number
 <new line>                                       ::= <NEW LINE>
 
-<whitespace>                                     ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u
+<whitespace>                                     ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u          action => whitespace
 
 <comment>                                        ::= <single line comment>
                                                    | <delimited comment>
@@ -1040,21 +1002,13 @@ __[ lexical grammar ]__
 <not slash or asterisk>                          ::= /[^\/*]/u # Any Unicode character except / or *
 
 event ^token = predicted <token>
-<token>                                          ::= <identifier>
-                                                   | <keyword>
-                                                   | <integer literal>
-                                                   | <real literal>
-                                                   | <character literal>
-                                                   | <string literal>
-                                                   | <operator or punctuator>
-
-event identifier$ = completed <identifier>
-event keyword$ = completed <keyword>
-event integer_literal$ = completed <integer literal>
-event real_literal$ = completed <real literal>
-event character_literal$ = completed <character literal>
-event string_literal$ = completed <string literal>
-event operator_or_punctuator$ = completed <operator or punctuator>
+<token>                                          ::= <identifier>                  action => token_identifier
+                                                   | <keyword>                     action => token_keyword
+                                                   | <integer literal>             action => token_integer_literal
+                                                   | <real literal>                action => token_real_literal
+                                                   | <character literal>           action => token_character_literal
+                                                   | <string literal>              action => token_string_literal
+                                                   | <operator or punctuator>      action => token_operator_or_punctuator
 
 <unicode escape sequence>                        ::= '\\u' <hex digit> <hex digit> <hex digit> <hex digit>
                                                    | '\\U' <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit>

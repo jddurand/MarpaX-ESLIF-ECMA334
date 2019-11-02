@@ -21,7 +21,7 @@ BEGIN {
     # Init log
     #
     our $defaultLog4perlConf = '
-log4perl.rootLogger              = TRACE, Screen
+log4perl.rootLogger              = INFO, Screen
 log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
 log4perl.appender.Screen.stderr  = 0
 log4perl.appender.Screen.layout  = PatternLayout
@@ -39,6 +39,7 @@ diag("###########################################################");
 diag("Inline data");
 diag("###########################################################");
 foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAGE__->section_data_names) {
+#     next unless $_ =~ /024 /;
     my $want_ok = ($_ =~ /^[0-9]+\s*ok/);
     my $want_ko = ($_ =~ /^[0-9]+\s*ko/);
     #
@@ -59,8 +60,7 @@ sub do_test {
 
     my $status;
     try {
-        my $lexicalAst = MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options);
-        diag Dumper($lexicalAst);
+        diag Dumper(MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options));
         $status = 1;
     } catch {
         if ($_->$_isa('MarpaX::ESLIF::ECMA334::Lexical::Exception')) {
@@ -92,28 +92,29 @@ sub do_test {
 done_testing();
 
 __DATA__
-__[ 001 ok / string and character literals ]__
+__[ 001 ok / empty input ]__
+__[ 002 ok / string and character literals ]__
 // A Hello World! program in C#.
 using System;
-{
+class Test {
     string string_literal_swedishumlaut = "Å"; // U+00C5
     string string_literal_angstromsign = "Å"; // U+212B
     string string_literal_money = "€"; // U+20AC
     string string_literal_simple_escape_sequences = "\'\"\\\0\a\b\f\n\r\t\v";
     string string_literal_sameThing = "\u20AC";
-    string character_literal_single_quote = '\'';
-    string character_literal_double_quote = '\"';
-    string character_literal_backslash = '\\';
-    string character_literal_null = '\0';
-    string character_literal_alert = '\a';
-    string character_literal_backspace = '\b';
-    string character_literal_form_feed = '\f';
-    string character_literal_new_line = '\n';
-    string character_literal_carriage_return = '\r';
-    string character_literal_horizontal_tab = '\t';
-    string character_literal_vertical_tab = '\v';
+    char character_literal_single_quote = '\'';
+    char character_literal_double_quote = '\"';
+    char character_literal_backslash = '\\';
+    char character_literal_null = '\0';
+    char character_literal_alert = '\a';
+    char character_literal_backspace = '\b';
+    char character_literal_form_feed = '\f';
+    char character_literal_new_line = '\n';
+    char character_literal_carriage_return = '\r';
+    char character_literal_horizontal_tab = '\t';
+    char character_literal_vertical_tab = '\v';
 }
-__[002 ok / example ]__
+__[ 003 ok / example ]__
 using System;
 using Netica;
 namespace NeticaDemo
@@ -156,7 +157,7 @@ namespace NeticaDemo
         }
     }
 }
-__[ 003 ok / pre-processing ]__
+__[ 004 ok / pre-processing ]__
 #define A
 #undef B
 class C
@@ -172,7 +173,7 @@ void H() {}
 void I() {}
 #endif
 }
-__[004 ok / pre-processing ]_
+__[ 005 ok / pre-processing ]_
 #define Enterprise
 #if Professional || Enterprise
 #define Advanced
@@ -183,7 +184,7 @@ namespace Megacorp.Data
 class PivotTable {...} // ... is not valid from syntactic grammar point of view, but is ok from lexical point of view
 #endif
 }
-__[005 ko / pre-processing: #define after any token ]_
+__[ 006 ko / pre-processing: #define after any token ]_
 #line 1 "My File"
 #define A
 namespace N
@@ -193,14 +194,14 @@ namespace N
 class Class1 {}
 #endif
 }
-__[006 ok / pre-processing: two #define ]__
+__[ 007 ok / pre-processing: two #define ]__
 #define A
 #define A
-__[007 ok / pre-processing: two #undef ]__
+__[ 008 ok / pre-processing: two #undef ]__
 #define A
 #undef A
 #undef A
-__[007 ok / pre-preprocessing: nested conditional sections ]__
+__[ 009 ok / pre-preprocessing: nested conditional sections ]__
 #define Debug
 #undef Trace
 // Debugging on
@@ -217,7 +218,7 @@ class PurchaseTransaction
   CommitHelper();
   }
 }
-__[008 ok / pre-processing: invalid comment but inside a skipped section ]__
+__[ 010 ok / pre-processing: invalid comment but inside a skipped section ]__
 #define Debug
 // Debugging on
 class PurchaseTransaction
@@ -230,7 +231,7 @@ class PurchaseTransaction
 #endif
   }
 }
-__[009 ok / pre-processing in muti-line element ]__
+__[ 011 ok / pre-processing in muti-line element ]__
 class Hello
 {
   static void Main() {
@@ -243,13 +244,13 @@ class Hello
     ");
   }
 }
-__[010 ok / pre-processing special case ]__
+__[ 012 ok / pre-processing special case ]__
 #if X
 /*
 #else
 /* */ class Q { }
 #endif
-__[011 ok / verbatim identifier ]__
+__[ 013 ok / verbatim identifier ]__
 class @class
 {
 	public static void @static(bool @bool) {
@@ -266,25 +267,25 @@ class Class1
 		cl\u0061ss.st\u0061tic(true);
 	}
 }
-__[012 ko / Missing #endif ]__
+__[ 014 ko / Missing #endif ]__
 class test
 {
 #if X
 }
-__[013 ko / Missing #endif ]__
+__[ 015 ko / Missing #endif ]__
 class test
 {
 #if X
 #elif Y
 }
-__[014 ko / Missing #endif ]__
+__[ 016 ko / Missing #endif ]__
 class test
 {
 #if X
 #elif Y
 #else
 }
-__[015 ok / Balanced #if/#endif ]__
+__[ 017 ok / Balanced #if/#endif ]__
 class test
 {
 #if X
@@ -294,28 +295,28 @@ class test
   string Z = "";
 #endif
 }
-__[016 ko / #error empty message ]__
+__[ 018 ko / #error empty message ]__
 class test
 {
 #error
 }
-__[017 ko / #error not empty message ]__
+__[ 019 ko / #error not empty message ]__
 class test
 {
 #error "PP Error Message"
 }
-__[018 ok / #warning empty message ]__
+__[ 020 ok / #warning empty message ]__
 class test
 {
 #warning
 }
-__[019 ok / #warning not empty message ]__
+__[ 021 ok / #warning not empty message ]__
 class test
 {
 #warning "PP Warning Message"
 /* This is a comment */
 }
-__[020 ok / #pragma text ]__
+__[ 022 ok / #pragma text ]__
 #pragma
 #pragma With Text No Space After
 #pragma With Text With Space After   
@@ -324,14 +325,19 @@ __[020 ok / #pragma text ]__
   #  pragma With Text No Space After
    #    pragma Using MEDIUM MATHEMATICAL SPACE
      #    pragma      Using OGHAM SPACE MARK
-__[021 ok / null parse ]__
-__[022 ok / grammar ambiguity from syntactic point of view, not from lexical point of view ]__
+__[ 023 ok / null parse ]__
+__[ 024 ok / grammar ambiguity from syntactic point of view, not from lexical point of view ]__
 class test
 {
   F(G<A, B>(7));
 }
-__[023 ok / right-shift is not productive in lexical grammar ]__
+__[ 025 ok / right-shift is not productive in lexical grammar ]__
 class test
 {
   unsigned short short13 = short11 >> 10;
+}
+__[ 026 ok / right-shift is not productive in lexical grammar ]__
+class test
+{
+  unsigned short short13 = short11 > > 10;
 }
