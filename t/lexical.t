@@ -21,7 +21,7 @@ BEGIN {
     # Init log
     #
     our $defaultLog4perlConf = '
-log4perl.rootLogger              = INFO, Screen
+log4perl.rootLogger              = TRACE, Screen
 log4perl.appender.Screen         = Log::Log4perl::Appender::Screen
 log4perl.appender.Screen.stderr  = 0
 log4perl.appender.Screen.layout  = PatternLayout
@@ -39,7 +39,7 @@ diag("###########################################################");
 diag("Inline data");
 diag("###########################################################");
 foreach (sort { int((split(' ', $a))[0]) <=> int((split(' ', $b))[0]) } __PACKAGE__->section_data_names) {
-#     next unless $_ =~ /024 /;
+    # next unless $_ =~ /013 /;
     my $want_ok = ($_ =~ /^[0-9]+\s*ok/);
     my $want_ko = ($_ =~ /^[0-9]+\s*ko/);
     #
@@ -232,9 +232,9 @@ class PurchaseTransaction
   }
 }
 __[ 011 ok / pre-processing in muti-line element ]__
-class Hello
+public class Hello
 {
-  static void Main() {
+  public static void Main() {
     System.Console.WriteLine(@"hello,
 #if Debug
       world
@@ -255,9 +255,9 @@ class @class
 {
 	public static void @static(bool @bool) {
 		if (@bool)
-			System.Console.WriteLine("true");
+			System.Console.WriteLine("true"); // true
 		else
-			System.Console.WriteLine("false");
+			System.Console.WriteLine("false"); // false
 		}
 }
 

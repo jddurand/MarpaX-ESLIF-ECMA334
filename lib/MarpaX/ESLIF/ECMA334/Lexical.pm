@@ -206,7 +206,8 @@ sub new {
              token_value_last__line_start => undef,   # Last token line start from source
              token_value_last_column_start => undef,  # Last token column start
              comments => [],                          # Comments are transveral in the grammar: we will reinject them in order in the final AST
-             lexical_ast => undef                     # Flattened list of tokens, comments and #pragma messages
+             lexical_ast => undef,                    # Flattened list of tokens, comments and #pragma messages
+             stripped_input => undef
          },
          $pkg)
 }
@@ -229,6 +230,8 @@ sub parse {
     #
     # Lexical parse
     #
+    my $input = $self->_preparse(%options);
+    $self->{stripped_input} = ' ' x bytes::length($input);
     my ($result, $match) =  $self->_parse
         (
          $LEXICAL_GRAMMAR,
@@ -237,11 +240,11 @@ sub parse {
          \&_lexicalEventManager,
          undef, # sharedEslifRecognizer
          %options,
-         input => $self->_preparse(%options),
+         input => $input,
          encoding => 'UTF-8'
         );
 
-    return $result
+    return { result => $result, stripped_input => $self->{stripped_input} }
 }
 
 # ============================================================================
@@ -597,7 +600,14 @@ sub _lexicalEventManager {
             $eslifRecognizerInterface->hasCompletion(1)
         }
         elsif ($event eq 'token$') {
-            $self->{has_token} = 1
+            $self->{has_token} = 1;
+            $self->_stripped_input($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'token');
+        }
+        elsif ($event eq 'whitespace$') {
+            $self->_stripped_input($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'whitespace');
+        }
+        elsif ($event eq 'new_line$') {
+            $self->_stripped_input($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'new line');
         }
         elsif ($event eq 'pp_expression$') {
             $eslifRecognizerInterface->hasCompletion(1)
@@ -651,7 +661,7 @@ sub _lexicalEventManager {
             #
         }
         elsif ($event eq 'comment$') {
-            $self->_setCommentValue($eslifRecognizerInterface, $eslifRecognizer, 'comment');
+            $self->_stripped_input($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, ':discard');
         }
         elsif ($event eq "last_pp_message_empty[]") {
         }
@@ -873,14 +883,26 @@ sub _lexicalEventManager {
 }
 
 # ============================================================================
-# _setCommentValue
+# _stripped
 # ============================================================================
-sub _setCommentValue {
-    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $type) = @_;
-    #
-    # Push a value for the AST
-    #
-    $self->_setAstValue($eslifRecognizerInterface, $eslifRecognizer, 'comment_value', ':discard', $type);
+sub _stripped_input {
+    my ($self, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $nameInGrammar) = @_;
+
+    my ($offset, $bytes_length, $string);
+    if ($nameInGrammar eq ':discard') {
+        #
+        # Special case for :discard
+        #
+        $string = $eslifRecognizer->discardLast();
+        $bytes_length = bytes::length($string);
+        my $currentOffset = bytes::length($eslifRecognizerInterface->data) - bytes::length($eslifRecognizer->input);
+        $offset = $currentOffset - $bytes_length;
+    } else {
+        ($offset, $bytes_length) = $eslifRecognizer->lastCompletedLocation($nameInGrammar);
+        $string = bytes::substr($eslifRecognizerInterface->data, $offset, $bytes_length);
+    }
+
+    bytes::substr($self->{stripped_input}, $offset, $bytes_length, $string);
 }
 
 # ============================================================================
@@ -975,9 +997,11 @@ __[ lexical grammar ]__
 #
 <input element>                                  ::= <whitespace>                    action => push_input_element
                                                    | <token>                         action => push_input_element
+event whitespace$ = completed <whitespace>
 event token$ = completed <token>
 
 :lexeme ::= <NEW LINE> pause => after event => NEW_LINE$           # Increments current line number
+event new_line$ = completed <new line>
 <new line>                                       ::= <NEW LINE>
 
 <whitespace>                                     ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u          action => whitespace
