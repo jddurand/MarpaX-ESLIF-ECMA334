@@ -49,8 +49,6 @@ sub new {
          {
              result => undef,
              definitions => $definitions,
-             lexical_ast => $options{lexical_ast} // [],
-             input_elements => [],
              %options
          }, $pkg)
 }
@@ -250,50 +248,6 @@ sub pp_pragma {
 
     return { type => 'pragma', value => $pp_pragma_text }
 }
-
-# ============================================================================
-# push_input_element
-# ============================================================================
-
-=head3 push_input_element($self, $input_element)
-
-Action for input element rule. Pushes C<$input_element> it to the list of input elements. Returns undef
-
-=cut
-
-sub push_input_element {
-    my ($self, $input_element) = @_;
-
-    push(@{$self->{input_elements}}, $input_element);
-
-    return
-}
-
-# ============================================================================
-# input
-# ============================================================================
-
-=head3 input($self, $input_section_opt)
-
-Action for input. Returns an array reference containing the list of input elements.
-
-=cut
-
-sub input {
-    my ($self) = @_;
-
-    return $self->{input_elements}
-}
-
-sub token_identifier             { my ($self, $token) = @_;      return { identifier             => $token      } }
-sub token_keyword                { my ($self, $token) = @_;      return { keyword                => $token      } }
-sub token_integer_literal        { my ($self, $token) = @_;      return { integer_literal        => $token      } }
-sub token_real_literal           { my ($self, $token) = @_;      return { real_literal           => $token      } }
-sub token_character_literal      { my ($self, $token) = @_;      return { character_literal      => $token      } }
-sub token_string_literal         { my ($self, $token) = @_;      return { string_literal         => $token      } }
-sub token_operator_or_punctuator { my ($self, $token) = @_;      return { operator_or_punctuator => $token      } }
-sub whitespace                   { my ($self, $whitespace) = @_; return { whitespace             => $whitespace } }
-sub input_section                { my $self = shift;             return [ map { @{$_} } grep { defined } @_ ] }
 
 # ============================================================================
 # _normalized_condition_symbol

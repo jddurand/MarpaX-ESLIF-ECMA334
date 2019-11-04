@@ -193,7 +193,9 @@ sub new {
          {
              last_pp_expression => undef,             # Last <pp expression>
              last_pp_message => undef,                # Last <pp message>
-             last_conditional_symbol => undef,        # Last #define/#endif conditional symbol
+             last_conditional_symbol => undef,        # Last <conditional symbol>
+             last_identifier => undef,                # Last <identifier>
+             last_keyword => undef,                   # Last <keyword>
              can_next_conditional_section => [],      # Booleans to drive the grammar using <CONDITIONAL SECTION OK> or <CONDITIONAL SECTION KO>
              has_token => 0,                          # Boolean to say if at least one token is seen
              line_hidden => 0,                        # Current line information is hidden or not (for debuggers)
@@ -202,13 +204,7 @@ sub new {
              line_directive_filename => undef,        # file name in #line directive, but before the end of #line directive
              line_directive_line => undef,            # line number in #line directive, but before the end of #line directive
              filename => undef,                       # Current file name with respect of #line directives
-             token_value_last_line_start => undef,    # Last token line start pp compliant
-             token_value_last__line_start => undef,   # Last token line start from source
-             token_value_last_column_start => undef,  # Last token column start
-             comments => [],                          # Comments are transveral in the grammar: we will reinject them in order in the final AST
-             lexical_ast => undef,                    # Flattened list of tokens, comments and #pragma messages
-             stripped_input => undef,
-             comments => []
+             elements => []                           # Flat list of all elements, including :discard
          },
          $pkg)
 }
@@ -231,8 +227,6 @@ sub parse {
     #
     # Lexical parse
     #
-    my $input = $self->_preparse(%options);
-    $self->{stripped_input} = ' ' x bytes::length($input);
     my ($result, $match) =  $self->_parse
         (
          $LEXICAL_GRAMMAR,
@@ -241,11 +235,11 @@ sub parse {
          \&_lexicalEventManager,
          undef, # sharedEslifRecognizer
          %options,
-         input => $input,
+         input => $self->_preparse(%options),
          encoding => 'UTF-8'
         );
 
-    return { input_elements => $result, stripped_input => $self->{stripped_input} }
+    return $self->{elements}
 }
 
 # ============================================================================
@@ -279,12 +273,9 @@ sub _preparse {
         #   (U+000A), a next line character (U+0085), a line separator (U+2028), or a paragraph separator
         #   (U+2029)
         #
-        $output .= "\x{000D}" if (bytes::length($output) > 0 && $output !~ /[\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]$/);
+        $output .= "\x{000D}" if (bytes::length($output) > 0 && $output !~ /[\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]$/)
     }
 
-    my $outputLength = bytes::length($output);
-
-    $log->tracef("_preparse: inputLength=%d, outputLength=%d", $inputLength, $outputLength);
     return $output # Always UTF-8 if not empty
 }
 
@@ -341,7 +332,7 @@ sub _parse {
     # -----------------------------------------------------------------------------------------
     # Call for valuation (we configured value interface to not accept ambiguity nor null parse)
     # -----------------------------------------------------------------------------------------
-    my $eslifValueInterface = $eslifValueInterfaceClass->new(%options, lexical_ast => $self->{lexical_ast});
+    my $eslifValueInterface = $eslifValueInterfaceClass->new(%options);
 
     $self->_exception($eslifGrammar, $eslifRecognizerInterface, undef, 'Valuation failure') unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
 
@@ -602,13 +593,30 @@ sub _lexicalEventManager {
         }
         elsif ($event eq 'token$') {
             $self->{has_token} = 1;
-            $self->_stripped_input($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'token');
+        }
+        elsif ($event eq 'identifier$') {
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'identifier', $self->{last_identifier});
+        }
+        elsif ($event eq 'keyword$') {
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'keyword', $self->{last_keyword});
+        }
+        elsif ($event eq 'integer_literal$') {
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'integer literal');
+        }
+        elsif ($event eq 'real_literal$') {
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'real literal');
+        }
+        elsif ($event eq 'character_literal$') {
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'character literal');
+        }
+        elsif ($event eq 'string_literal$') {
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'string literal');
+        }
+        elsif ($event eq 'operator_or_punctuator$') {
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'operator or punctuator');
         }
         elsif ($event eq 'whitespace$') {
-            $self->_stripped_input($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'whitespace');
-        }
-        elsif ($event eq 'new_line$') {
-            $self->_stripped_input($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, 'new line');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'whitespace');
         }
         elsif ($event eq 'pp_expression$') {
             $eslifRecognizerInterface->hasCompletion(1)
@@ -661,15 +669,15 @@ sub _lexicalEventManager {
             # No-op - processed before everything in any case
             #
         }
-        elsif ($event eq 'comment$') {
-            $self->_stripped_input($eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, ':discard');
+        elsif ($event eq 'discard$') {
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, ':discard');
         }
         elsif ($event eq "last_pp_message_empty[]") {
         }
         elsif ($event eq "last_pp_message_not_empty[]") {
         }
         elsif ($event eq "pp_pragma_with_text[]") {
-            $self->_setPragmaTextValue($eslifRecognizerInterface, $eslifRecognizer, 'pragma text');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'input characters', undef, '#pragma');
         }
         elsif ($event eq "^trigger_pp_error") {
             $self->_pp_exception($eslifGrammar, $eslifRecognizerInterface, undef, $self->{last_pp_message});
@@ -749,14 +757,10 @@ sub _lexicalEventManager {
                 if ((! defined($keyword)) || ($identifier_or_keyword ne $keyword)) {
                     $match = $identifier_or_keyword_match;
                     $value = $identifier_or_keyword;
-                    $name = 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD'
+                    $name = 'AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD';
+                    $self->{last_identifier} = $value
                 }
             }
-        }
-        elsif ($event eq '^token') {
-            $self->{token_value_last_line_start} = $self->{line};
-            $self->{token_value_last__line_start} = $self->{_line};
-            $self->{token_value_last_column_start} = $eslifRecognizer->column;
         }
         elsif ($event eq '^keyword') {
             if (! $keyword_done) {
@@ -767,7 +771,8 @@ sub _lexicalEventManager {
             if (defined($keyword)) {
                 $match = $keyword_match;
                 $value = $keyword;
-                $name = 'KEYWORD'
+                $name = 'KEYWORD';
+                $self->{last_keyword} = $value
             }
         }
         elsif ($event eq '^identifier_or_keyword') {
@@ -779,7 +784,8 @@ sub _lexicalEventManager {
             if (defined($identifier_or_keyword)) {
                 $match = $identifier_or_keyword_match;
                 $value = $identifier_or_keyword;
-                $name = 'IDENTIFIER OR KEYWORD'
+                $name = 'IDENTIFIER OR KEYWORD';
+                $self->{last_identifier} = $value
             }
         }
         elsif ($event eq '^conditional_symbol') {
@@ -884,71 +890,38 @@ sub _lexicalEventManager {
 }
 
 # ============================================================================
-# _stripped
+# _pushElement
 # ============================================================================
-sub _stripped_input {
-    my ($self, $eslifGrammar, $eslifRecognizerInterface, $eslifRecognizer, $nameInGrammar) = @_;
+sub _pushElement {
+    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $name, $value, $forcedName) = @_;
 
-    my ($offset, $bytes_length, $string);
-    if ($nameInGrammar eq ':discard') {
-        #
-        # Special case for :discard
-        #
-        $string = $eslifRecognizer->discardLast();
-        $bytes_length = bytes::length($string);
-        my $currentOffset = bytes::length($eslifRecognizerInterface->data) - bytes::length($eslifRecognizer->input);
-        $offset = $currentOffset - $bytes_length;
-    } else {
-        ($offset, $bytes_length) = $eslifRecognizer->lastCompletedLocation($nameInGrammar);
-        $string = bytes::substr($eslifRecognizerInterface->data, $offset, $bytes_length);
-    }
-
-    bytes::substr($self->{stripped_input}, $offset, $bytes_length, $string);
-}
-
-# ============================================================================
-# _setPragmaTextValue
-# ============================================================================
-sub _setPragmaTextValue {
-    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $type) = @_;
-    #
-    # Push a value for the AST
-    #
-    $self->_setAstValue($eslifRecognizerInterface, $eslifRecognizer, 'pragma', 'input characters', $type);
-}
-
-# ============================================================================
-# _setAstValue
-# ============================================================================
-sub _setAstValue {
-    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $what, $nameInGrammar, $type) = @_;
-
-    my $astValue = $self->{$what} // {};
-    $astValue->{filename} = $self->{filename};
-    $astValue->{line_hidden} = $self->{line_hidden};
-    $astValue->{line_end} = $self->{line};
-    $astValue->{_line_end} = $self->{_line};
-    $astValue->{column_end} = $eslifRecognizer->column;
-    if ($nameInGrammar eq ':discard') {
+    my $element = {
+        name        => $forcedName // $name,
+        filename    => $self->{filename},
+        line_hidden => $self->{line_hidden},
+        line_end    => $self->{line},
+        _line_end   => $self->{_line},
+        column_end  => $eslifRecognizer->column
+    };
+    if ($name eq ':discard') {
         #
         # Special case for :discard
         #
         my $discard = $eslifRecognizer->discardLast();
         my $discardBytesLength = bytes::length($discard);
         my $currentOffset = bytes::length($eslifRecognizerInterface->data) - bytes::length($eslifRecognizer->input);
-        $astValue->{offset} = $currentOffset - $discardBytesLength;
-        $astValue->{bytes_length} = $discardBytesLength;
-        $astValue->{string} = $discard;
+        $element->{offset} = $currentOffset - $discardBytesLength;
+        $element->{bytes_length} = $discardBytesLength;
+        $element->{match} = $element->{value} = $discard;
     } else {
-        ($astValue->{offset}, $astValue->{bytes_length}) = $eslifRecognizer->lastCompletedLocation($nameInGrammar);
-        $astValue->{string} = bytes::substr($eslifRecognizerInterface->data, $astValue->{offset}, $astValue->{bytes_length});
-        utf8::decode($astValue->{string});
+        ($element->{offset}, $element->{bytes_length}) = $eslifRecognizer->lastCompletedLocation($name);
+        $element->{match} = bytes::substr($eslifRecognizerInterface->data, $element->{offset}, $element->{bytes_length});
+        utf8::decode($element->{match});
+        $element->{value} = $value // $element->{match}
     }
-    $astValue->{length} = length($astValue->{string});
-    $astValue->{type} = $type;
+    $element->{length} = length($element->{string});
 
-    $self->{lexical_ast} //= [];
-    push(@{$self->{lexical_ast}}, $astValue);
+    push(@{$self->{elements}}, $element)
 }
 
 =head1 NOTES
@@ -973,9 +946,13 @@ __[ lexical grammar ]__
 # ############################################################################################################
 # Lexical Grammar
 # ############################################################################################################
-:default                                         ::= action => ::convert[UTF-8]
+#
+# Formally we do NOT need any value from lexical grammar, though we still execute the valuation
+# to check if input is correct (in particular v.s. exhaustion)
+#
+:default                                         ::= action => ::undef symbol-action => ::undef
 :desc                                            ::= 'Lexical grammar'
-:discard                                         ::= <comment> event => comment$
+:discard                                         ::= <comment> event => discard$
 
 #
 # Note that the spec does NOT say if file-name characters disable comments. We assume they do so.
@@ -984,28 +961,27 @@ __[ lexical grammar ]__
 :terminal ::= '"'  pause => after event => :discard[switch]           # Disable comment in regular string literal
 :terminal ::= '@"' pause => after event => :discard[switch]           # Disable comment in verbatim string literal (Note that it ends with '"' character)
 
-<input>                                          ::= <input section opt>             action => ::shift
-<input section opt>                              ::=                                 action => ::undef
-<input section opt>                              ::= <input section>                 action => ::shift
-<input section>                                  ::= <input section part>+           action => input_section
-<input section part>                             ::= <input elements opt> <new line> action => ::copy[0]
-                                                    | <pp directive>                 action => ::shift
-<input elements opt>                             ::=                                 action => ::undef
-<input elements opt>                             ::= <input elements>                action => ::shift
-<input elements>                                 ::= <input element>+                action => ::row
+<input>                                          ::= <input section opt>
+<input section opt>                              ::=
+<input section opt>                              ::= <input section>
+<input section>                                  ::= <input section part>+
+<input section part>                             ::= <input elements opt> <new line>
+                                                    | <pp directive>
+<input elements opt>                             ::=
+<input elements opt>                             ::= <input elements>
+<input elements>                                 ::= <input element>+
 #
 # We add a zero-length lexeme element everytime a <token> rule matches
 #
-<input element>                                  ::= <whitespace>                    action => ::shift
-                                                   | <token>                         action => ::shift
+<input element>                                  ::= <whitespace>
+                                                   | <token>
 event whitespace$ = completed <whitespace>
 event token$ = completed <token>
 
 :lexeme ::= <NEW LINE> pause => after event => NEW_LINE$           # Increments current line number
-event new_line$ = completed <new line>
 <new line>                                       ::= <NEW LINE>
 
-<whitespace>                                     ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u          action => whitespace
+<whitespace>                                     ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u
 
 <comment>                                        ::= <single line comment>
                                                    | <delimited comment>
@@ -1027,19 +1003,25 @@ event new_line$ = completed <new line>
 <asterisks>                                      ::= '*'+
 <not slash or asterisk>                          ::= /[^\/*]/u # Any Unicode character except / or *
 
-event ^token = predicted <token>
-<token>                                          ::= <identifier>                  action => token_identifier
-                                                   | <keyword>                     action => token_keyword
-                                                   | <integer literal>             action => token_integer_literal
-                                                   | <real literal>                action => token_real_literal
-                                                   | <character literal>           action => token_character_literal
-                                                   | <string literal>              action => token_string_literal
-                                                   | <operator or punctuator>      action => token_operator_or_punctuator
+event identifier$ = completed <identifier>
+event keyword$ = completed <keyword>
+event integer_literal$ = completed <integer literal>
+event real_literal$ = completed <real literal>
+event character_literal$ = completed <character literal>
+event string_literal$ = completed <string literal>
+event operator_or_punctuator$ = completed <operator or punctuator>
+<token>                                          ::= <identifier>
+                                                   | <keyword>
+                                                   | <integer literal>
+                                                   | <real literal>
+                                                   | <character literal>
+                                                   | <string literal>
+                                                   | <operator or punctuator>
 
 <unicode escape sequence>                        ::= '\\u' <hex digit> <hex digit> <hex digit> <hex digit>
                                                    | '\\U' <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit>
-<identifier>                                     ::= <available identifier>        action => ::copy[0]
-                                                   | '@' <identifier or keyword>   action => ::copy[1]
+<identifier>                                     ::= <available identifier>
+                                                   | '@' <identifier or keyword>
 
 event ^identifier_or_keyword = predicted <identifier or keyword>
 <identifier or keyword>                          ::= <IDENTIFIER OR KEYWORD>
@@ -1048,7 +1030,7 @@ event ^available_identifier = predicted <available identifier>
 <available identifier>                           ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
 
 event ^keyword = predicted <keyword>
-<keyword>                                        ::= <KEYWORD>            action => ::copy[0]
+<keyword>                                        ::= <KEYWORD>
 
 <contextual keyword>                             ::= 'add'
                                                    | 'by'
@@ -1086,8 +1068,8 @@ event ^keyword = predicted <keyword>
 <boolean literal>                                ::= 'true'
                                                    | 'false'
 
-<integer literal>                                ::= <decimal integer literal>                action => ::copy[0]
-                                                   | <hexadecimal integer literal>            action => ::copy[0]
+<integer literal>                                ::= <decimal integer literal>
+                                                   | <hexadecimal integer literal>
 
 <decimal integer literal>                        ::= <decimal digits> <integer type suffix opt>
 <integer type suffix opt>                        ::=
@@ -1252,12 +1234,12 @@ event ^keyword = predicted <keyword>
 event :discard[on] = completed <pp new line>
 event :discard[on] = completed <pp diagnostic>
 
-<pp directive>                                   ::= <pp declaration>             action => ::undef
-                                                   | <pp conditional>             action => ::undef
-                                                   | <pp line>                    action => ::undef
-                                                   | <pp diagnostic>              action => ::undef
-                                                   | <pp region>                  action => ::undef
-                                                   | <pp pragma>                  action => ::shift
+<pp directive>                                   ::= <pp declaration>
+                                                   | <pp conditional>
+                                                   | <pp line>
+                                                   | <pp diagnostic>
+                                                   | <pp region>
+                                                   | <pp pragma>
 
 event ^conditional_symbol = predicted <conditional symbol>
 <conditional symbol>                             ::= <ANY IDENTIFIER OR KEYWORD EXCEPT TRUE OR FALSE>
@@ -1379,10 +1361,10 @@ event ^pp_line_indicator = predicted <line indicator>
 <file name character>                            ::= /[^\x{0022}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY INPUT CHARACTER EXCEPT 0022 AND NEW LINE CHARACTER>
 
 event pp_pragma_with_text[] = nulled <pp pragma with text>
-<pp pragma>                                      ::= <PP PRAGMA> <pp pragma text>                                     action => pp_pragma
-<pp pragma text>                                 ::= <new line>                                                       action => ::undef
-                                                   | <whitespace> <input characters> <new line> <pp pragma with text> action => ::copy[1] # Only #pragma's text with a not-nullable text are of interest
-                                                   | <whitespace> <new line>                                          action => ::undef
+<pp pragma>                                      ::= <PP PRAGMA> <pp pragma text>
+<pp pragma text>                                 ::= <new line>
+                                                   | <whitespace> <input characters> <new line> <pp pragma with text>
+                                                   | <whitespace> <new line>
 <pp pragma with text>                            ::=
 
 #
