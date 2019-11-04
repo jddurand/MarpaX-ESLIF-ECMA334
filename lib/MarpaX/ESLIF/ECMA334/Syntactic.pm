@@ -141,7 +141,7 @@ sub parse {
     # If it totally empty: no op
     #
     my $value;
-    if (! defined($eslifRecognizerInterface->nextAstItem)) {
+    if (! defined($eslifRecognizerInterface->nextElement)) {
         $value = undef;
     } else {
         my $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($SYNTACTIC_GRAMMAR, $eslifRecognizerInterface);

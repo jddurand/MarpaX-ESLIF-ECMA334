@@ -44,7 +44,7 @@ sub new {
     return bless
     {
         _elements => $elements,
-        _currentAstItem => undef
+        _currentElement => undef
     }, $pkg
 }
 
@@ -70,7 +70,7 @@ sub read {
         return 0
     }
 
-    $self->{_currentAstItem} = shift @{$self->{_elements}};
+    $self->{_currentElement} = shift @{$self->{_elements}};
     $log->tracef('%s::read: return 1', __PACKAGE__);
     return 1;
 }
@@ -135,11 +135,11 @@ sub data {
     my ($self) = @_;
 
     my $rc =
-        ($self->{_currentAstItem}->{type} eq 'pragma text')
+        ($self->{_currentElement}->{name} eq '#pragma')
         ?
-        sprintf("#pragma %s\n", $self->{_currentAstItem}->{string})
+        sprintf("#pragma %s\n", $self->{_currentElement}->{value})
         :
-        $self->{_currentAstItem}->{string}
+        $self->{_currentElement}->{value}
     ;
 
     $log->tracef('%s::data: return "%s"', __PACKAGE__, $rc);
@@ -203,48 +203,48 @@ sub isWithTrack {
 }
 
 # ============================================================================
-# currentAstItem
+# currentElement
 # ============================================================================
 
-=head3 currentAstItem($self)
+=head3 currentElement($self)
 
 Returns the current structured item from lexical AST.
 
 =cut
 
-sub currentAstItem {
+sub currentElement {
     my ($self) = @_;
 
-    return $self->{_currentAstItem}
+    return $self->{_currentElement}
 }
 
 # ============================================================================
-# nextAstItem
+# nextElement
 # ============================================================================
 
-=head3 nextAstItem($self)
+=head3 nextElement($self)
 
 Returns the next structured item from lexical AST.
 
 =cut
 
-sub nextAstItem {
+sub nextElement {
     my ($self) = @_;
 
     return @{$self->{_elements}} ? $self->{_elements}->[0] : undef
 }
 
 # ============================================================================
-# consumeNextAstItem
+# consumeNextElement
 # ============================================================================
 
-=head3 consumeNextAstItem($self)
+=head3 consumeNextElement($self)
 
 Consumes the next structured item from lexical AST.
 
 =cut
 
-sub consumeNextAstItem {
+sub consumeNextElement {
     my ($self) = @_;
 
     splice(@{$self->{_elements}}, 0, 1)
