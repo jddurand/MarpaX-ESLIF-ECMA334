@@ -22,12 +22,12 @@ This module parses syntactically the C# language as per Standard ECMA-334 5th Ed
     #
     # The input to syntactic grammar must be the lexical output from lexical grammar
     #
-    my $lexical    = MarpaX::ESLIF::ECMA334::Lexical->new();
-    my $input      = "public interface Test { bool MyTest(); }"
-    my $lexicalAst = $lexical->parse(input => input, encoding => 'UTF-16', definitions => { 'TRUE' => $MarpaX::ESLIF::true });
+    my $lexical  = MarpaX::ESLIF::ECMA334::Lexical->new();
+    my $input    = "public interface Test { bool MyTest(); }"
+    my $elements = $lexical->parse(input => input, encoding => 'UTF-16', definitions => { 'TRUE' => $MarpaX::ESLIF::true });
 
     my $syntacticAst = MarpaX::ESLIF::ECMA334::Syntactic->new();
-    my $ast          = $syntactic->parse(lexicalAst => $lexicalAst);
+    my $ast          = $syntactic->parse(elements => $elements);
 
 =cut
 
@@ -73,9 +73,9 @@ Parser method. C<%options> is hash containing:
 
 =over
 
-=item lexicalAst
+=item elements
 
-Output from lexical parse.
+Output from lexical parse is an array reference of all tokens, comments and pragmas
 
 =back
 

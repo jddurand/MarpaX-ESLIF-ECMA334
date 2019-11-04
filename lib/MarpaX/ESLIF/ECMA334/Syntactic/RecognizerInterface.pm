@@ -39,11 +39,11 @@ Instantiate a new recognizer interface object.
 sub new {
     my ($pkg, %options) = @_;
 
-    my $lexicalAst = delete($options{lexicalAst}) // [];
+    my $elements = delete($options{elements}) // [];
 
     return bless
     {
-        _lexicalAst => $lexicalAst,
+        _elements => $elements,
         _currentAstItem => undef
     }, $pkg
 }
@@ -65,12 +65,12 @@ Returns a true or a false value, indicating if last read was successful.
 sub read {
     my ($self) = @_;
 
-    if (! @{$self->{_lexicalAst}}) {
+    if (! @{$self->{_elements}}) {
         $log->tracef('%s::read: return 0', __PACKAGE__);
         return 0
     }
 
-    $self->{_currentAstItem} = shift @{$self->{_lexicalAst}};
+    $self->{_currentAstItem} = shift @{$self->{_elements}};
     $log->tracef('%s::read: return 1', __PACKAGE__);
     return 1;
 }
@@ -88,7 +88,7 @@ Returns a true or a false value, indicating if end-of-data is reached.
 sub isEof {
     my ($self) = @_;
 
-    my $rc = !@{$self->{_lexicalAst}};
+    my $rc = !@{$self->{_elements}};
     $log->tracef('%s::isEof: return %d', __PACKAGE__, $rc);
     return $rc
 }
@@ -231,7 +231,7 @@ Returns the next structured item from lexical AST.
 sub nextAstItem {
     my ($self) = @_;
 
-    return @{$self->{_lexicalAst}} ? $self->{_lexicalAst}->[0] : undef
+    return @{$self->{_elements}} ? $self->{_elements}->[0] : undef
 }
 
 # ============================================================================
@@ -247,7 +247,7 @@ Consumes the next structured item from lexical AST.
 sub consumeNextAstItem {
     my ($self) = @_;
 
-    splice(@{$self->{_lexicalAst}}, 0, 1)
+    splice(@{$self->{_elements}}, 0, 1)
 }
 
 1;
