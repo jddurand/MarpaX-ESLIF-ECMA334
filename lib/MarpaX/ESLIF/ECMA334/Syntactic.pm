@@ -218,56 +218,56 @@ sub _SyntacticEventManager {
     my $rc = 0;
     my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
 
-    my $nextAstItem = $eslifRecognizerInterface->nextAstItem;
+    my $nextElement = $eslifRecognizerInterface->nextElement;
     my @alternatives;
     my $latm = -1;
 
-    $log->tracef("[%s] Events: %s, nextAstItem type is %s", $SYNTACTIC_GRAMMAR->currentDescription, \@events, defined($nextAstItem) ? $nextAstItem->{type} : 'undef');
+    $log->tracef("[%s] Events: %s, nextElement name is %s", $SYNTACTIC_GRAMMAR->currentDescription, \@events, defined($nextElement) ? $nextElement->{name} : 'undef');
     foreach my $event (@events) {
         my ($match, $name, $value, $length) = (undef, undef, undef, undef, undef);
 
         if ($event eq '^identifier') {
-            if (defined($nextAstItem) && $nextAstItem->{type} eq 'identifier') {
-                $match = $nextAstItem->{string};
-                $value = $nextAstItem->{string};
+            if (defined($nextElement) && $nextElement->{name} eq 'identifier') {
+                $match = $nextElement->{match};
+                $value = $nextElement->{value};
                 $name = 'IDENTIFIER';
             }
         }
         elsif ($event eq '^identifier_equal_to_assembly_or_module') {
-            if (defined($nextAstItem) && $nextAstItem->{type} eq 'identifier' && ($nextAstItem->{string} eq 'assembly' || $nextAstItem->{string} eq 'module')) {
-                $match = $nextAstItem->{string};
-                $value = $nextAstItem->{string};
+            if (defined($nextElement) && $nextElement->{name} eq 'identifier' && ($nextElement->{value} eq 'assembly' || $nextElement->{value} eq 'module')) {
+                $match = $nextElement->{match};
+                $value = $nextElement->{value};
                 $name = 'IDENTIFIER EQUAL TO ASSEMBLY OR MODULE';
             }
         }
         elsif ($event eq '^identifier_not_equal_to_assembly_or_module') {
-            if (defined($nextAstItem) && $nextAstItem->{type} eq 'identifier' && ($nextAstItem->{string} ne 'assembly' && $nextAstItem->{string} ne 'module')) {
-                $match = $nextAstItem->{string};
-                $value = $nextAstItem->{string};
+            if (defined($nextElement) && $nextElement->{name} eq 'identifier' && ($nextElement->{value} ne 'assembly' && $nextElement->{value} ne 'module')) {
+                $match = $nextElement->{match};
+                $value = $nextElement->{value};
                 $name = 'IDENTIFIER NOT EQUAL TO ASSEMBLY OR MODULE';
             }
         }
         elsif ($event eq '^literal') {
-            if (defined($nextAstItem) && $nextAstItem->{type} =~ /\bliteral$/) {
-                $match = $nextAstItem->{string};
-                $value = $nextAstItem->{string};
+            if (defined($nextElement) && $nextElement->{name} =~ /\bliteral$/) {
+                $match = $nextElement->{match};
+                $value = $nextElement->{value};
                 $name = 'LITERAL';
             }
-            elsif (defined($nextAstItem) && $nextAstItem->{type} eq 'keyword') {
-                $value = $nextAstItem->{string};
+            elsif (defined($nextElement) && $nextElement->{name} eq 'keyword') {
+                $value = $nextElement->{value};
                 #
                 # Lexical grammar exposes 'true, 'false' and 'null' as a keyword.
                 #
                 if ($value eq 'true' || $value eq 'false' || $value eq 'null') {
                     $name = 'LITERAL';
-                    $match = $nextAstItem->{string};
+                    $match = $nextElement->{match};
                 }
             }
         }
         elsif ($event eq '^keyword') {
-            if (defined($nextAstItem) && $nextAstItem->{type} eq 'keyword') {
-                $match = $nextAstItem->{string};
-                $value = $nextAstItem->{string};
+            if (defined($nextElement) && $nextElement->{name} eq 'keyword') {
+                $match = $nextElement->{match};
+                $value = $nextElement->{value};
                 $name = 'KEYWORD';
             }
         }
@@ -300,11 +300,14 @@ sub _SyntacticEventManager {
             $log->tracef("[%s] Alternative: <%s> = %s", $SYNTACTIC_GRAMMAR->currentDescription, $_->{name}, $_->{value});
             croak "Alternative failure" . $_->{name} unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
         } @alternatives;
-        $eslifRecognizerInterface->consumeNextAstItem;
+        $eslifRecognizerInterface->consumeNextElement;
         $log->tracef("[%s] Lexeme complete on 0 byte", $SYNTACTIC_GRAMMAR->currentDescription, 0);
         croak "Lexeme complete failure" unless $eslifRecognizer->lexemeComplete(0);
         $rc = 1
     } else {
+        #
+        # No alternative but there was an element ?
+        #
         $log->tracef("[%s] No alternative injected", $SYNTACTIC_GRAMMAR->currentDescription);
     }
 
@@ -325,6 +328,7 @@ __[ syntactic grammar ]__
 :desc ::= 'Syntactic grammar'
 :start ::= <compilation unit>
 :discard ::= <comment> event => comment$
+:discard ::= <whitespace>
 :discard ::= <pragma text> event => pragma_text$
 
 #  --------------
@@ -1314,3 +1318,8 @@ event ^keyword = predicted <keyword>
 # -----------
 <pragma text>                                    ::= '#pragma '<input characters> <new line>
 <new line>                                       ::= /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
+
+# ----------
+# Whitespace
+# ----------
+<whitespace>                                     ::= /[\p{Zs}\x{0009}\x{000B}\x{000C}]+/u

@@ -29,7 +29,7 @@ This module parses C# language as per Standard ECMA-334 5th Edition.
     #
     # Lexical parse
     #
-    my $lexicalAst = MarpaX::ESLIF::ECMA334::Lexical->new->parse
+    my $elements = MarpaX::ESLIF::ECMA334::Lexical->new->parse
                        (
                          input => $input,                 # The input
                          encoding => 'UTF-8',             # The eventual input encoding - optional though recommended
@@ -41,7 +41,7 @@ This module parses C# language as per Standard ECMA-334 5th Edition.
     #
     # Syntactic parse
     #
-    my $syntacticAst = MarpaX::ESLIF::ECMA334::Syntactic->new->parse(lexicalAst);
+    my $ast = MarpaX::ESLIF::ECMA334::Syntactic->new->parse(elements => $elements);
 
 =head1 SEE ALSO
 
@@ -84,16 +84,7 @@ Output is an AST of the syntactic parse.
 sub parse {
     my ($self, %options) = @_;
 
-    #
-    # The input to syntactic grammar must be the lexical output from lexical grammar
-    #
-    my $lexicalAst   = MarpaX::ESLIF::ECMA334::Lexical->new()->parse(%options);
-    #
-    # Lexical value is a reference to an array containing a flat view of all tokens, pragma texts and comments
-    #
-    my $syntacticAst = MarpaX::ESLIF::ECMA334::Syntactic->new()->parse(lexicalAst => $lexicalAst);
-
-    return $syntacticAst;
+    return MarpaX::ESLIF::ECMA334::Syntactic->new()->parse(elements => MarpaX::ESLIF::ECMA334::Lexical->new()->parse(%options))
 }
 
 1;

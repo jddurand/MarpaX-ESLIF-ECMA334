@@ -102,7 +102,7 @@ using System;
     string money = "€"; // U+20AC
     string sameThing = "\u20AC";
 }
-__[002 ok / example ]__
+__[ 002 ok / example ]__
 namespace NeticaDemo
 {
     class Program
@@ -129,7 +129,7 @@ void H() {}
 void I() {}
 #endif
 }
-__[004 ok / pre-processing ]_
+__[ 004 ok / pre-processing ]_
 #define Enterprise
 #if Professional || Enterprise
 #define Advanced
@@ -140,7 +140,7 @@ namespace Megacorp.Data
 class PivotTable {}
 #endif
 }
-__[005 ko / pre-processing: #define after any token ]_
+__[ 005 ko / pre-processing: #define after any token ]_
 #line 1 "My File"
 #define A
 namespace N
@@ -150,14 +150,14 @@ namespace N
 class Class1 {}
 #endif
 }
-__[006 ok / pre-processing: two #define ]__
+__[ 006 ok / pre-processing: two #define ]__
 #define A
 #define A
-__[007 ok / pre-processing: two #undef ]__
+__[ 007 ok / pre-processing: two #undef ]__
 #define A
 #undef A
 #undef A
-__[007 ok / pre-preprocessing: nested conditional sections ]__
+__[ 008 ok / pre-preprocessing: nested conditional sections ]__
 #define Debug
 #undef Trace
 // Debugging on
@@ -174,7 +174,7 @@ class PurchaseTransaction
   CommitHelper();
   }
 }
-__[008 ok / pre-processing: invalid comment but inside a skipped section ]__
+__[ 009 ok / pre-processing: invalid comment but inside a skipped section ]__
 #define Debug
 // Debugging on
 class PurchaseTransaction
@@ -187,7 +187,7 @@ class PurchaseTransaction
 #endif
   }
 }
-__[009 ok / pre-processing in muti-line element ]__
+__[ 010 ok / pre-processing in muti-line element ]__
 class Hello
 {
   static void Main() {
@@ -200,13 +200,13 @@ class Hello
     ");
   }
 }
-__[010 ok / pre-processing special case ]__
+__[ 011 ok / pre-processing special case ]__
 #if X
 /*
 #else
 /* */ class Q { }
 #endif
-__[011 ok / verbatim identifier ]__
+__[ 012 ok / verbatim identifier ]__
 class @class
 {
 	public static void @static(bool @bool) {
@@ -223,25 +223,25 @@ class Class1
 		cl\u0061ss.st\u0061tic(true);
 	}
 }
-__[012 ko / Missing #endif ]__
+__[ 013 ko / Missing #endif ]__
 class test
 {
 #if X
 }
-__[013 ko / Missing #endif ]__
+__[ 014 ko / Missing #endif ]__
 class test
 {
 #if X
 #elif Y
 }
-__[014 ko / Missing #endif ]__
+__[ 015 ko / Missing #endif ]__
 class test
 {
 #if X
 #elif Y
 #else
 }
-__[015 ok / Balanced #if/#endif ]__
+__[ 016 ok / Balanced #if/#endif ]__
 class test
 {
 #if X
@@ -251,28 +251,28 @@ class test
   string Z = "";
 #endif
 }
-__[016 ko / #error empty message ]__
+__[ 017 ko / #error empty message ]__
 class test
 {
 #error
 }
-__[017 ko / #error not empty message ]__
+__[ 018 ko / #error not empty message ]__
 class test
 {
 #error "PP Error Message"
 }
-__[018 ok / #warning empty message ]__
+__[ 019 ok / #warning empty message ]__
 class test
 {
 #warning
 }
-__[019 ok / #warning not empty message ]__
+__[ 020 ok / #warning not empty message ]__
 class test
 {
 #warning "PP Warning Message"
 /* This is a comment */
 }
-__[020 ok / #pragma text ]__
+__[ 021 ok / #pragma text ]__
 #pragma
 #pragma With Text No Space After
 #pragma With Text With Space After   
@@ -281,14 +281,24 @@ __[020 ok / #pragma text ]__
   #  pragma With Text No Space After
    #    pragma Using MEDIUM MATHEMATICAL SPACE
      #    pragma      Using OGHAM SPACE MARK
-__[021 ok / null parse ]__
-__[022 ok / grammar ambiguity from syntactic point of view, not from lexical point of view ]__
+__[ 022 ok / null parse ]__
+__[ 023 ok / grammar ambiguity from syntactic point of view, not from lexical point of view ]__
 class test
 {
   F(G<A, B>(7));
 }
-__[023 ok / boolean literal is a keyword in lexical grammar, may be a literal or keyword in syntactic grammar ]__
+__[ 024 ok / boolean literal is a keyword in lexical grammar, may be a literal or keyword in syntactic grammar ]__
 class Class1
 {
   object x = true;
+}
+__[ 025 ok / right-shift is not productive in lexical grammar ]__
+class test
+{
+  unsigned short short13 = short11 >> 10;
+}
+__[ 026 ok / right-shift is not productive in lexical grammar ]__
+class test
+{
+  unsigned short short13 = short11 > > 10; /* =========> Discarded <======== */
 }
