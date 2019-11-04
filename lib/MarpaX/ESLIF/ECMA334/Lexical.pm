@@ -207,7 +207,8 @@ sub new {
              token_value_last_column_start => undef,  # Last token column start
              comments => [],                          # Comments are transveral in the grammar: we will reinject them in order in the final AST
              lexical_ast => undef,                    # Flattened list of tokens, comments and #pragma messages
-             stripped_input => undef
+             stripped_input => undef,
+             comments => []
          },
          $pkg)
 }
@@ -244,7 +245,7 @@ sub parse {
          encoding => 'UTF-8'
         );
 
-    return { result => $result, stripped_input => $self->{stripped_input} }
+    return { input_elements => $result, stripped_input => $self->{stripped_input} }
 }
 
 # ============================================================================
@@ -983,20 +984,20 @@ __[ lexical grammar ]__
 :terminal ::= '"'  pause => after event => :discard[switch]           # Disable comment in regular string literal
 :terminal ::= '@"' pause => after event => :discard[switch]           # Disable comment in verbatim string literal (Note that it ends with '"' character)
 
-<input>                                          ::= <input section opt>             action => input
+<input>                                          ::= <input section opt>             action => ::shift
 <input section opt>                              ::=                                 action => ::undef
-<input section opt>                              ::= <input section>                 action => ::undef
-<input section>                                  ::= <input section part>+           action => ::undef
-<input section part>                             ::= <input elements opt> <new line> action => ::undef
-                                                    | <pp directive>                 action => push_input_element
+<input section opt>                              ::= <input section>                 action => ::shift
+<input section>                                  ::= <input section part>+           action => input_section
+<input section part>                             ::= <input elements opt> <new line> action => ::copy[0]
+                                                    | <pp directive>                 action => ::shift
 <input elements opt>                             ::=                                 action => ::undef
-<input elements opt>                             ::= <input elements>                action => ::undef
-<input elements>                                 ::= <input element>+                action => ::undef
+<input elements opt>                             ::= <input elements>                action => ::shift
+<input elements>                                 ::= <input element>+                action => ::row
 #
 # We add a zero-length lexeme element everytime a <token> rule matches
 #
-<input element>                                  ::= <whitespace>                    action => push_input_element
-                                                   | <token>                         action => push_input_element
+<input element>                                  ::= <whitespace>                    action => ::shift
+                                                   | <token>                         action => ::shift
 event whitespace$ = completed <whitespace>
 event token$ = completed <token>
 
@@ -1037,8 +1038,8 @@ event ^token = predicted <token>
 
 <unicode escape sequence>                        ::= '\\u' <hex digit> <hex digit> <hex digit> <hex digit>
                                                    | '\\U' <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit> <hex digit>
-<identifier>                                     ::= <available identifier>
-                                                   | '@' <identifier or keyword>
+<identifier>                                     ::= <available identifier>        action => ::copy[0]
+                                                   | '@' <identifier or keyword>   action => ::copy[1]
 
 event ^identifier_or_keyword = predicted <identifier or keyword>
 <identifier or keyword>                          ::= <IDENTIFIER OR KEYWORD>
@@ -1047,7 +1048,7 @@ event ^available_identifier = predicted <available identifier>
 <available identifier>                           ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
 
 event ^keyword = predicted <keyword>
-<keyword>                                        ::= <KEYWORD>
+<keyword>                                        ::= <KEYWORD>            action => ::copy[0]
 
 <contextual keyword>                             ::= 'add'
                                                    | 'by'
@@ -1085,8 +1086,8 @@ event ^keyword = predicted <keyword>
 <boolean literal>                                ::= 'true'
                                                    | 'false'
 
-<integer literal>                                ::= <decimal integer literal>
-                                                   | <hexadecimal integer literal>
+<integer literal>                                ::= <decimal integer literal>                action => ::copy[0]
+                                                   | <hexadecimal integer literal>            action => ::copy[0]
 
 <decimal integer literal>                        ::= <decimal digits> <integer type suffix opt>
 <integer type suffix opt>                        ::=
@@ -1097,7 +1098,7 @@ event ^keyword = predicted <keyword>
 <hex digits>                                     ::= <hex digit>+
 <hex digit>                                      ::= /[0-9A-Fa-f]/
 
-<real literal>                                   ::= <decimal digits> '.' <decimal digits> <exponent part opt> <real type suffix opt>
+<real literal>                                   ::= <decimal digits> '.' <decimal digits> <exponent part opt> <real type suffix opt>       
                                                    |                  '.' <decimal digits> <exponent part opt> <real type suffix opt>
                                                    |                      <decimal digits> <exponent part>     <real type suffix opt>
                                                    |                      <decimal digits>                     <real type suffix>

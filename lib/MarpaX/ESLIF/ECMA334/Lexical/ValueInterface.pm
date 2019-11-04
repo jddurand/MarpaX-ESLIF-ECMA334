@@ -236,134 +236,6 @@ sub unicode_unescape_sequence {
 }
 
 # ============================================================================
-# token_identifier
-# ============================================================================
-
-=head3 token_identifier($self, $identifier)
-
-Action when token is an identifier. Returns a hash C<{ type => 'identifier', value => $identifier}> reference.
-
-=cut
-
-sub token_identifier {
-    my ($self, $identifier) = @_;
-
-    return { type => 'identifier', value => $identifier }
-}
-
-# ============================================================================
-# token_keyword
-# ============================================================================
-
-=head3 token_keyword($self, $keyword)
-
-Action when token is an keyword. Returns a hash C<{ type => 'keyword', value => $keyword}> reference.
-
-=cut
-
-sub token_keyword {
-    my ($self, $keyword) = @_;
-
-    return { type => 'keyword', value => $keyword }
-}
-
-# ============================================================================
-# token_integer_literal
-# ============================================================================
-
-=head3 token_integer_literal($self, $integer_literal)
-
-Action when token is an integer_literal. Returns a hash C<{ type => 'integer_literal', value => $integer_literal}> reference.
-
-=cut
-
-sub token_integer_literal {
-    my ($self, $integer_literal) = @_;
-
-    return { type => 'integer_literal', value => $integer_literal }
-}
-
-# ============================================================================
-# token_real_literal
-# ============================================================================
-
-=head3 token_real_literal($self, $real_literal)
-
-Action when token is an real_literal. Returns a hash C<{ type => 'real_literal', value => $real_literal}> reference.
-
-=cut
-
-sub token_real_literal {
-    my ($self, $real_literal) = @_;
-
-    return { type => 'real_literal', value => $real_literal }
-}
-
-# ============================================================================
-# token_character_literal
-# ============================================================================
-
-=head3 token_character_literal($self, $character_literal)
-
-Action when token is an character_literal. Returns a hash C<{ type => 'character_literal', value => $character_literal}> reference.
-
-=cut
-
-sub token_character_literal {
-    my ($self, $character_literal) = @_;
-
-    return { type => 'character_literal', value => $character_literal }
-}
-
-# ============================================================================
-# token_string_literal
-# ============================================================================
-
-=head3 token_string_literal($self, $string_literal)
-
-Action when token is an string_literal. Returns a hash C<{ type => 'string_literal', value => $string_literal}> reference.
-
-=cut
-
-sub token_string_literal {
-    my ($self, $string_literal) = @_;
-
-    return { type => 'string_literal', value => $string_literal }
-}
-
-# ============================================================================
-# token_operator_or_punctuator
-# ============================================================================
-
-=head3 token_operator_or_punctuator($self, $operator_or_punctuator)
-
-Action when token is an operator_or_punctuator. Returns a hash C<{ type => 'operator_or_punctuator', value => $operator_or_punctuator}> reference.
-
-=cut
-
-sub token_operator_or_punctuator {
-    my ($self, $operator_or_punctuator) = @_;
-
-    return { type => 'operator_or_punctuator', value => $operator_or_punctuator }
-}
-
-# ============================================================================
-# whitespace
-# ============================================================================
-
-=head3 whitespace($self, $whitespace)
-
-Action for whitespace rule. Returns a hash C<{ type => 'whitespace', value => $whitespace}> reference.
-
-=cut
-
-sub whitespace {
-    my ($self, $whitespace) = @_;
-
-    return { type => 'whitespace', value => $whitespace }
-}
-
-# ============================================================================
 # pp_pragma
 # ============================================================================
 
@@ -412,6 +284,16 @@ sub input {
 
     return $self->{input_elements}
 }
+
+sub token_identifier             { my ($self, $token) = @_;      return { identifier             => $token      } }
+sub token_keyword                { my ($self, $token) = @_;      return { keyword                => $token      } }
+sub token_integer_literal        { my ($self, $token) = @_;      return { integer_literal        => $token      } }
+sub token_real_literal           { my ($self, $token) = @_;      return { real_literal           => $token      } }
+sub token_character_literal      { my ($self, $token) = @_;      return { character_literal      => $token      } }
+sub token_string_literal         { my ($self, $token) = @_;      return { string_literal         => $token      } }
+sub token_operator_or_punctuator { my ($self, $token) = @_;      return { operator_or_punctuator => $token      } }
+sub whitespace                   { my ($self, $whitespace) = @_; return { whitespace             => $whitespace } }
+sub input_section                { my $self = shift;             return [ map { @{$_} } grep { defined } @_ ] }
 
 # ============================================================================
 # _normalized_condition_symbol
