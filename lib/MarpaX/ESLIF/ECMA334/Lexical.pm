@@ -1300,7 +1300,7 @@ event :discard[off] = predicted <skipped section>
 <skipped characters opt>                         ::=
 <skipped characters opt>                         ::= <skipped characters>
 <skipped characters>                             ::= <whitespace opt> <not number sign> <input characters opt>
-<not number sign>                                ::= /[^#]/u # Any input-character except #
+<not number sign>                                ::= /[^\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}#]/u # Any <input character> except #
 
 <pp diagnostic>                                  ::= <PP ERROR> <pp message>   <trigger pp error>
                                                    | <PP WARNING> <pp message> <trigger pp warning>
