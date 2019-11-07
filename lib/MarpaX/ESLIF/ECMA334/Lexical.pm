@@ -595,28 +595,28 @@ sub _lexicalEventManager {
             $self->{has_token} = 1;
         }
         elsif ($event eq 'identifier$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'identifier', $self->{last_identifier});
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'identifier', $self->{last_identifier});
         }
         elsif ($event eq 'keyword$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'keyword', $self->{last_keyword});
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'keyword', $self->{last_keyword});
         }
         elsif ($event eq 'integer_literal$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'integer literal');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'integer literal');
         }
         elsif ($event eq 'real_literal$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'real literal');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'real literal');
         }
         elsif ($event eq 'character_literal$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'character literal');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'character literal');
         }
         elsif ($event eq 'string_literal$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'string literal');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'string literal');
         }
         elsif ($event eq 'operator_or_punctuator$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'operator or punctuator');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'operator or punctuator');
         }
         elsif ($event eq 'whitespace$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'whitespace');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 0, 'whitespace');
         }
         elsif ($event eq 'pp_expression$') {
             $eslifRecognizerInterface->hasCompletion(1)
@@ -670,14 +670,14 @@ sub _lexicalEventManager {
             #
         }
         elsif ($event eq 'discard$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, ':discard');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 0, ':discard');
         }
         elsif ($event eq "last_pp_message_empty[]") {
         }
         elsif ($event eq "last_pp_message_not_empty[]") {
         }
         elsif ($event eq "pp_pragma_with_text[]") {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'input characters', undef, '#pragma');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 0, 'input characters', undef, '#pragma');
         }
         elsif ($event eq "^trigger_pp_error") {
             $self->_pp_exception($eslifGrammar, $eslifRecognizerInterface, undef, $self->{last_pp_message});
@@ -893,10 +893,11 @@ sub _lexicalEventManager {
 # _pushElement
 # ============================================================================
 sub _pushElement {
-    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $name, $value, $forcedName) = @_;
+    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $is_token, $name, $value, $forcedName) = @_;
 
     my $element = {
         name        => $forcedName // $name,
+        is_token    => $is_token,
         filename    => $self->{filename},
         line_hidden => $self->{line_hidden},
         line_end    => $self->{line},
@@ -1372,7 +1373,7 @@ event pp_pragma_with_text[] = nulled <pp pragma with text>
 #
 <LINE INDICATOR DEFAULT>                           ~ 'default'
 <LINE INDICATOR HIDDEN>                            ~ 'hidden'
-<NEW LINE>                                         ~ /(?:\x{000D}|\x{000A}|\x{000D}\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
+<NEW LINE>                                         ~ /(?:\x{000D}\x{000A}|\x{000D}|\x{000A}|\x{0085}|\x{2028}|\x{2029})/u
 <SINGLE CHARACTER>                                 ~ /[^\x{0027}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0027 005C AND NEW LINE CHARACTER>
 <SINGLE REGULAR STRING LITERAL CHARACTER>          ~ /[^\x{0022}\x{005C}\x{000D}\x{000A}\x{0085}\x{2028}\x{2029}]/u   # <ANY CHARACTER EXCEPT 0022 005C AND NEW LINE CHARACTER>
 <KEYWORD>                                          ~ /[^\s\S]/ # Matches nothing
