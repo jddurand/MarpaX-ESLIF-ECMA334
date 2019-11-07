@@ -239,7 +239,7 @@ sub parse {
          encoding => 'UTF-8'
         );
 
-    return $self->{elements}
+    return $result
 }
 
 # ============================================================================
@@ -346,7 +346,7 @@ sub _parse {
 
     $log->tracef("[%d] %s: Success: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $finalLength);
 
-    return ($eslifValueInterface->getResult, $match)
+    return ($eslifRecognizerInterface->recurseLevel ? $eslifValueInterface->getResult : $eslifValueInterface->elements, $match)
 }
 
 # ============================================================================
@@ -591,32 +591,60 @@ sub _lexicalEventManager {
         if ($event eq "'exhausted'") {
             $eslifRecognizerInterface->hasCompletion(1)
         }
-        elsif ($event eq 'token$') {
-            $self->{has_token} = 1;
-        }
         elsif ($event eq 'identifier$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'identifier', $self->{last_identifier});
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'identifier', $self->{last_identifier});
+            $self->{has_token} = 1;
+            $match = '';
+            $value = $self->{elements}->[-1];
+            $name = 'INPUT ELEMENT';
         }
         elsif ($event eq 'keyword$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'keyword', $self->{last_keyword});
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'keyword', $self->{last_keyword});
+            $self->{has_token} = 1;
+            $match = '';
+            $value = $self->{elements}->[-1];
+            $name = 'INPUT ELEMENT';
         }
         elsif ($event eq 'integer_literal$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'integer literal');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'integer literal');
+            $self->{has_token} = 1;
+            $match = '';
+            $value = $self->{elements}->[-1];
+            $name = 'INPUT ELEMENT';
         }
         elsif ($event eq 'real_literal$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'real literal');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'real literal');
+            $self->{has_token} = 1;
+            $match = '';
+            $value = $self->{elements}->[-1];
+            $name = 'INPUT ELEMENT';
         }
         elsif ($event eq 'character_literal$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'character literal');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'character literal');
+            $self->{has_token} = 1;
+            $match = '';
+            $value = $self->{elements}->[-1];
+            $name = 'INPUT ELEMENT';
         }
         elsif ($event eq 'string_literal$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'string literal');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'string literal');
+            $self->{has_token} = 1;
+            $match = '';
+            $value = $self->{elements}->[-1];
+            $name = 'INPUT ELEMENT';
         }
         elsif ($event eq 'operator_or_punctuator$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 1, 'operator or punctuator');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'operator or punctuator');
+            $self->{has_token} = 1;
+            $match = '';
+            $value = $self->{elements}->[-1];
+            $name = 'INPUT ELEMENT';
         }
-        elsif ($event eq 'whitespace$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 0, 'whitespace');
+        elsif ($event eq 'whitespace_element$') {
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'whitespace element');
+            $match = '';
+            $value = $self->{elements}->[-1];
+            $name = 'INPUT ELEMENT';
         }
         elsif ($event eq 'pp_expression$') {
             $eslifRecognizerInterface->hasCompletion(1)
@@ -669,15 +697,12 @@ sub _lexicalEventManager {
             # No-op - processed before everything in any case
             #
         }
-        elsif ($event eq 'discard$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 0, ':discard');
-        }
         elsif ($event eq "last_pp_message_empty[]") {
         }
         elsif ($event eq "last_pp_message_not_empty[]") {
         }
         elsif ($event eq "pp_pragma_with_text[]") {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 0, 'input characters', undef, '#pragma');
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'input characters', undef, '#pragma');
         }
         elsif ($event eq "^trigger_pp_error") {
             $self->_pp_exception($eslifGrammar, $eslifRecognizerInterface, undef, $self->{last_pp_message});
@@ -893,11 +918,11 @@ sub _lexicalEventManager {
 # _pushElement
 # ============================================================================
 sub _pushElement {
-    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $is_token, $name, $value, $forcedName) = @_;
+    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $name, $value, $forcedName) = @_;
 
     my $element = {
+        indice      => scalar(@{$self->{elements}}),
         name        => $forcedName // $name,
-        is_token    => $is_token,
         filename    => $self->{filename},
         line_hidden => $self->{line_hidden},
         line_end    => $self->{line},
@@ -951,9 +976,9 @@ __[ lexical grammar ]__
 # Formally we do NOT need any value from lexical grammar, though we still execute the valuation
 # to check if input is correct (in particular v.s. exhaustion)
 #
-:default                                         ::= action => ::undef symbol-action => ::undef
+:default                                         ::= action => ::undef
 :desc                                            ::= 'Lexical grammar'
-:discard                                         ::= <comment> event => discard$
+:discard                                         ::= <comment>
 
 #
 # Note that the spec does NOT say if file-name characters disable comments. We assume they do so.
@@ -972,13 +997,12 @@ __[ lexical grammar ]__
 <input elements opt>                             ::= <input elements>
 <input elements>                                 ::= <input element>+
 #
-# We add a zero-length lexeme element everytime a <token> rule matches
+# We add a zero-length <INPUT ELEMENT> lexeme every time a token or a whitespace matches
 #
-<input element>                                  ::= <whitespace>
-                                                   | <token>
-event whitespace$ = completed <whitespace>
-event token$ = completed <token>
-
+event whitespace_element$ = completed <whitespace element>
+<input element>                                  ::= <whitespace element> <INPUT ELEMENT> action => element
+                                                   | <token>              <INPUT ELEMENT> action => element
+<whitespace element>                             ::= <whitespace>
 :lexeme ::= <NEW LINE> pause => after event => NEW_LINE$           # Increments current line number
 <new line>                                       ::= <NEW LINE>
 
@@ -1397,6 +1421,7 @@ event pp_pragma_with_text[] = nulled <pp pragma with text>
 <PP EXPRESSION>                                    ~ /[^\s\S]/ # Matches nothing
 <TRIGGER PP ERROR>                                 ~ /[^\s\S]/ # Matches nothing
 <TRIGGER PP WARNING>                               ~ /[^\s\S]/ # Matches nothing
+<INPUT ELEMENT>                                    ~ /[^\s\S]/ # Matches nothing
 
 __[ identifier or keyword grammar ]__
 # ############################################################################################################

@@ -49,6 +49,7 @@ sub new {
          {
              result => undef,
              definitions => $definitions,
+             elements => [],
              %options
          }, $pkg)
 }
@@ -247,6 +248,40 @@ sub pp_pragma {
     my ($self, $PP_PRAGMA, $pp_pragma_text) = @_;
 
     return { type => 'pragma', value => $pp_pragma_text }
+}
+
+# ============================================================================
+# element
+# ============================================================================
+
+=head3 element($self, $what, $element_mark)
+
+Pushes C<$element_mark> to the list of elements. Returns undef.
+
+=cut
+
+sub element {
+    my ($self, $what, $element_mark) = @_;
+
+    push(@{$self->{elements}}, $element_mark);
+
+    return
+}
+
+# ============================================================================
+# elements
+# ============================================================================
+
+=head3 elements($self)
+
+Return the sort list of elements as an array reference.
+
+=cut
+
+sub elements {
+    my ($self) = @_;
+
+    return [ sort { $a->{indice} <=> $b->{indice} } @{$self->{elements}} ]
 }
 
 # ============================================================================
