@@ -60,7 +60,8 @@ sub do_test {
 
     my $status;
     try {
-        diag Dumper(MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options));
+        my $result = MarpaX::ESLIF::ECMA334::Lexical->new->parse(%options);
+        diag Dumper($result);
         $status = 1;
     } catch {
         if ($_->$_isa('MarpaX::ESLIF::ECMA334::Lexical::Exception')) {

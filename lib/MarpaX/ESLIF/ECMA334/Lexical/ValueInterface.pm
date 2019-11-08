@@ -49,7 +49,7 @@ sub new {
          {
              result => undef,
              definitions => $definitions,
-             elements => [],
+             input_elements => [],
              %options
          }, $pkg)
 }
@@ -251,37 +251,37 @@ sub pp_pragma {
 }
 
 # ============================================================================
-# element
+# input_element
 # ============================================================================
 
-=head3 element($self, $what, $element_mark)
+=head3 input_element($self, $what, $element_mark)
 
-Pushes C<$element_mark> to the list of elements. Returns undef.
+Pushes C<$element_mark> to the list of input elements. Returns undef.
 
 =cut
 
-sub element {
+sub input_element {
     my ($self, $what, $element_mark) = @_;
 
-    push(@{$self->{elements}}, $element_mark);
+    push(@{$self->{input_elements}}, $element_mark);
 
     return
 }
 
 # ============================================================================
-# elements
+# input_elements
 # ============================================================================
 
-=head3 elements($self)
+=head3 input_elements($self)
 
-Return the sort list of elements as an array reference.
+Return the sort list of input_elements as an array reference.
 
 =cut
 
-sub elements {
+sub input_elements {
     my ($self) = @_;
 
-    return [ sort { $a->{indice} <=> $b->{indice} } @{$self->{elements}} ]
+    return [ sort { $a->{indice} <=> $b->{indice} } @{$self->{input_elements}} ]
 }
 
 # ============================================================================

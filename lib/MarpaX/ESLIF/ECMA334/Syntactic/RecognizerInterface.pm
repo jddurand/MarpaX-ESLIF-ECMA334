@@ -41,10 +41,9 @@ sub new {
 
     my $elements = delete($options{elements}) // [];
 
-    return bless
-    {
-        _elements => $elements,
-        _currentElement => undef
+    return bless {
+        elements => $elements,
+        currentElement => undef
     }, $pkg
 }
 
@@ -65,14 +64,9 @@ Returns a true or a false value, indicating if last read was successful.
 sub read {
     my ($self) = @_;
 
-    if (! @{$self->{_elements}}) {
-        $log->tracef('%s::read: return 0', __PACKAGE__);
-        return 0
-    }
-
-    $self->{_currentElement} = shift @{$self->{_elements}};
-    $log->tracef('%s::read: return 1', __PACKAGE__);
-    return 1;
+    my $rc = scalar(@{$self->{elements}}) > 0 ? 1 : 0;
+    $log->tracef('%s::read: return %d', __PACKAGE__, $rc);
+    return $rc;
 }
 
 # ============================================================================
@@ -88,7 +82,7 @@ Returns a true or a false value, indicating if end-of-data is reached.
 sub isEof {
     my ($self) = @_;
 
-    my $rc = !@{$self->{_elements}};
+    my $rc = scalar(@{$self->{elements}}) > 0 ? 0 : 1;
     $log->tracef('%s::isEof: return %d', __PACKAGE__, $rc);
     return $rc
 }
@@ -134,15 +128,10 @@ Returns last bunch of data. Depends on the next value from lexical AST.
 sub data {
     my ($self) = @_;
 
-    my $rc =
-        ($self->{_currentElement}->{name} eq '#pragma')
-        ?
-        sprintf("#pragma %s\n", $self->{_currentElement}->{value})
-        :
-        $self->{_currentElement}->{value}
-    ;
+    $self->{currentElement} = shift @{$self->{elements}};
+    my $rc = $self->{currentElement}->{value};
 
-    $log->tracef('%s::data: return "%s"', __PACKAGE__, $rc);
+    $log->tracef('%s::data: return %s', __PACKAGE__, defined($rc) ? "\"$rc\"" : 'undef');
     return $rc
 }
 
@@ -215,7 +204,23 @@ Returns the current structured item from lexical AST.
 sub currentElement {
     my ($self) = @_;
 
-    return $self->{_currentElement}
+    return $self->{currentElement}
+}
+
+# ============================================================================
+# consumeCurrentElement
+# ============================================================================
+
+=head3 consumeCurrentElement($self)
+
+Consumes the current structured item from lexical AST.
+
+=cut
+
+sub consumeCurrentElement {
+    my ($self) = @_;
+
+    return $self->{currentElement} = undef
 }
 
 # ============================================================================
@@ -231,7 +236,7 @@ Returns the next structured item from lexical AST.
 sub nextElement {
     my ($self) = @_;
 
-    return @{$self->{_elements}} ? $self->{_elements}->[0] : undef
+    return @{$self->{elements}} ? $self->{elements}->[0] : undef
 }
 
 # ============================================================================
@@ -247,7 +252,7 @@ Consumes the next structured item from lexical AST.
 sub consumeNextElement {
     my ($self) = @_;
 
-    splice(@{$self->{_elements}}, 0, 1)
+    shift @{$self->{_elements}}
 }
 
 1;

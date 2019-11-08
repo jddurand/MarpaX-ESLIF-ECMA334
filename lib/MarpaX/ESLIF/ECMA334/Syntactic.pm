@@ -20,14 +20,19 @@ This module parses syntactically the C# language as per Standard ECMA-334 5th Ed
 
     use MarpaX::ESLIF::ECMA334::Syntactic;
     #
-    # The input to syntactic grammar must be the lexical output from lexical grammar
+    # The input to syntactic grammar must be the lexical output from lexical grammar,
+    # that is a HASH containing:
+    # - stripped_input         A flattened view of the input, with only spaces and tokens
+    # - input_elements         All <input element>'s are per rule in lexical grammar (i.e. <token>'s and relevant <whitespace>'s)
+    # - comments               All <comment>'s
     #
-    my $lexical  = MarpaX::ESLIF::ECMA334::Lexical->new();
-    my $input    = "public interface Test { bool MyTest(); }"
-    my $elements = $lexical->parse(input => input, encoding => 'UTF-16', definitions => { 'TRUE' => $MarpaX::ESLIF::true });
-
-    my $syntacticAst = MarpaX::ESLIF::ECMA334::Syntactic->new();
-    my $ast          = $syntactic->parse(elements => $elements);
+    my $lexical        =  MarpaX::ESLIF::ECMA334::Lexical->new();
+    my $input          = "public interface Test { bool MyTest(); }"
+    my $lexical_output = $lexical->parse(input => input, encoding => 'UTF-16', definitions => { 'TRUE' => $MarpaX::ESLIF::true });
+    #
+    # Syntactic AST is using only the input_elements from lexical output
+    #
+    my $ast          = MarpaX::ESLIF::ECMA334::Syntactic->new()->parse(input_elements => $lexical_output->{input_elements});
 
 =cut
 
@@ -218,57 +223,63 @@ sub _SyntacticEventManager {
     my $rc = 0;
     my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
 
-    my $nextElement = $eslifRecognizerInterface->nextElement;
+    my $currentElement = $eslifRecognizerInterface->currentElement;
     my @alternatives;
     my $latm = -1;
 
-    $log->tracef("[%s] Events: %s, nextElement name is %s", $SYNTACTIC_GRAMMAR->currentDescription, \@events, defined($nextElement) ? $nextElement->{name} : 'undef');
+    $log->tracef("[%s] Events: %s, currentElement name is %s", $SYNTACTIC_GRAMMAR->currentDescription, \@events, defined($currentElement) ? $currentElement->{name} : 'undef');
     foreach my $event (@events) {
         my ($match, $name, $value, $length) = (undef, undef, undef, undef, undef);
 
         if ($event eq '^identifier') {
-            if (defined($nextElement) && $nextElement->{name} eq 'identifier') {
-                $match = $nextElement->{match};
-                $value = $nextElement->{value};
+            if (defined($currentElement) && $currentElement->{name} eq 'identifier') {
+                $match = $currentElement->{match};
+                $value = $currentElement->{value};
                 $name = 'IDENTIFIER';
+                $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
             }
         }
         elsif ($event eq '^identifier_equal_to_assembly_or_module') {
-            if (defined($nextElement) && $nextElement->{name} eq 'identifier' && ($nextElement->{value} eq 'assembly' || $nextElement->{value} eq 'module')) {
-                $match = $nextElement->{match};
-                $value = $nextElement->{value};
+            if (defined($currentElement) && $currentElement->{name} eq 'identifier' && ($currentElement->{value} eq 'assembly' || $currentElement->{value} eq 'module')) {
+                $match = $currentElement->{match};
+                $value = $currentElement->{value};
                 $name = 'IDENTIFIER EQUAL TO ASSEMBLY OR MODULE';
+                $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
             }
         }
         elsif ($event eq '^identifier_not_equal_to_assembly_or_module') {
-            if (defined($nextElement) && $nextElement->{name} eq 'identifier' && ($nextElement->{value} ne 'assembly' && $nextElement->{value} ne 'module')) {
-                $match = $nextElement->{match};
-                $value = $nextElement->{value};
+            if (defined($currentElement) && $currentElement->{name} eq 'identifier' && ($currentElement->{value} ne 'assembly' && $currentElement->{value} ne 'module')) {
+                $match = $currentElement->{match};
+                $value = $currentElement->{value};
                 $name = 'IDENTIFIER NOT EQUAL TO ASSEMBLY OR MODULE';
+                $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
             }
         }
         elsif ($event eq '^literal') {
-            if (defined($nextElement) && $nextElement->{name} =~ /\bliteral$/) {
-                $match = $nextElement->{match};
-                $value = $nextElement->{value};
+            if (defined($currentElement) && $currentElement->{name} =~ /\bliteral$/) {
+                $match = $currentElement->{match};
+                $value = $currentElement->{value};
                 $name = 'LITERAL';
+                $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
             }
-            elsif (defined($nextElement) && $nextElement->{name} eq 'keyword') {
-                $value = $nextElement->{value};
+            elsif (defined($currentElement) && $currentElement->{name} eq 'keyword') {
+                $value = $currentElement->{value};
                 #
                 # Lexical grammar exposes 'true, 'false' and 'null' as a keyword.
                 #
                 if ($value eq 'true' || $value eq 'false' || $value eq 'null') {
                     $name = 'LITERAL';
-                    $match = $nextElement->{match};
+                    $match = $currentElement->{match};
+                    $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
                 }
             }
         }
         elsif ($event eq '^keyword') {
-            if (defined($nextElement) && $nextElement->{name} eq 'keyword') {
-                $match = $nextElement->{match};
-                $value = $nextElement->{value};
+            if (defined($currentElement) && $currentElement->{name} eq 'keyword') {
+                $match = $currentElement->{match};
+                $value = $currentElement->{value};
                 $name = 'KEYWORD';
+                $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
             }
         }
         elsif ($event eq 'comment$') {
@@ -300,9 +311,8 @@ sub _SyntacticEventManager {
             $log->tracef("[%s] Alternative: <%s> = %s", $SYNTACTIC_GRAMMAR->currentDescription, $_->{name}, $_->{value});
             croak "Alternative failure" . $_->{name} unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
         } @alternatives;
-        $eslifRecognizerInterface->consumeNextElement;
-        $log->tracef("[%s] Lexeme complete on 0 byte", $SYNTACTIC_GRAMMAR->currentDescription, 0);
-        croak "Lexeme complete failure" unless $eslifRecognizer->lexemeComplete(0);
+        $log->tracef("[%s] Lexeme complete on %d bytes", $SYNTACTIC_GRAMMAR->currentDescription, $latm);
+        croak "Lexeme complete failure" unless $eslifRecognizer->lexemeComplete($latm);
         $rc = 1
     } else {
         #

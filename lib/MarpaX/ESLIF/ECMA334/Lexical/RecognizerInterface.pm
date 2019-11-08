@@ -47,6 +47,10 @@ C<%options> may contain:
 
 =over
 
+=item input
+
+The input
+
 =item encoding
 
 The encoding of the data

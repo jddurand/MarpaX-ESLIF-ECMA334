@@ -227,7 +227,8 @@ sub parse {
     #
     # Lexical parse
     #
-    my ($result, $match) =  $self->_parse
+   my $input = delete($options{input});
+    my ($input_elements, $match) =  $self->_parse
         (
          $LEXICAL_GRAMMAR,
          'MarpaX::ESLIF::ECMA334::Lexical::RecognizerInterface',
@@ -235,11 +236,27 @@ sub parse {
          \&_lexicalEventManager,
          undef, # sharedEslifRecognizer
          %options,
-         input => $self->_preparse(%options),
+         input => $self->_preparse(input => $input, %options),
          encoding => 'UTF-8'
         );
 
-    return $result
+    #
+    # Result is an array reference of tokens in order.
+    # We reconstruct a flat version of the input separated by space.
+    #
+    my $stripped_input;
+    if (defined($input)) {
+        $stripped_input = ' ' x bytes::length($input // '');
+        #
+        # Because value length can be lower than match length,
+        # we replace token values in reverse order
+        foreach my $input_element (reverse @{$input_elements}) {
+            bytes::substr($stripped_input, $input_element->{offset}, $input_element->{bytes_length}, $input_element->{value});
+        }
+        utf8::decode($stripped_input);        
+    }
+
+    return { stripped_input => $stripped_input, input_elements => $input_elements }
 }
 
 # ============================================================================
@@ -346,7 +363,7 @@ sub _parse {
 
     $log->tracef("[%d] %s: Success: Remains %d bytes", $eslifRecognizerInterface->recurseLevel, $eslifGrammar->currentDescription, $finalLength);
 
-    return ($eslifRecognizerInterface->recurseLevel ? $eslifValueInterface->getResult : $eslifValueInterface->elements, $match)
+    return ($eslifRecognizerInterface->recurseLevel ? $eslifValueInterface->getResult : $eslifValueInterface->input_elements, $match)
 }
 
 # ============================================================================
@@ -641,7 +658,13 @@ sub _lexicalEventManager {
             $name = 'INPUT ELEMENT';
         }
         elsif ($event eq 'whitespace_element$') {
-            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'whitespace element');
+            #
+            # Because <whitespace> is spreaded everywhere, we use this rule to distinguish a <whitespace>
+            # that is part of of <input element> from the other places.
+            # Since <whitespace element> ::= <whitespace>
+            # we can lie a little by saying we want to see 'whitespace' instead of 'whitespace element'
+            #
+            $self->_pushElement($eslifRecognizerInterface, $eslifRecognizer, 'whitespace');
             $match = '';
             $value = $self->{elements}->[-1];
             $name = 'INPUT ELEMENT';
@@ -945,7 +968,7 @@ sub _pushElement {
         utf8::decode($element->{match});
         $element->{value} = $value // $element->{match}
     }
-    $element->{length} = length($element->{string});
+    $element->{length} = length($element->{value});
 
     push(@{$self->{elements}}, $element)
 }
@@ -1000,8 +1023,8 @@ __[ lexical grammar ]__
 # We add a zero-length <INPUT ELEMENT> lexeme every time a token or a whitespace matches
 #
 event whitespace_element$ = completed <whitespace element>
-<input element>                                  ::= <whitespace element> <INPUT ELEMENT> action => element
-                                                   | <token>              <INPUT ELEMENT> action => element
+<input element>                                  ::= <whitespace element> <INPUT ELEMENT> action => input_element
+                                                   | <token>              <INPUT ELEMENT> action => input_element
 <whitespace element>                             ::= <whitespace>
 :lexeme ::= <NEW LINE> pause => after event => NEW_LINE$           # Increments current line number
 <new line>                                       ::= <NEW LINE>
