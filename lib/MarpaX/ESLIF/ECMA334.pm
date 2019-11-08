@@ -84,7 +84,8 @@ Output is an AST of the syntactic parse.
 sub parse {
     my ($self, %options) = @_;
 
-    return MarpaX::ESLIF::ECMA334::Syntactic->new()->parse(elements => MarpaX::ESLIF::ECMA334::Lexical->new()->parse(%options))
+    my $lexical_output = MarpaX::ESLIF::ECMA334::Lexical->new()->parse(%options);
+    return MarpaX::ESLIF::ECMA334::Syntactic->new()->parse(input => $lexical_output->{stripped_input})
 }
 
 1;

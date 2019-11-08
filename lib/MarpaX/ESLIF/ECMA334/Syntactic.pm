@@ -32,7 +32,7 @@ This module parses syntactically the C# language as per Standard ECMA-334 5th Ed
     #
     # Syntactic AST is using only the input_elements from lexical output
     #
-    my $ast          = MarpaX::ESLIF::ECMA334::Syntactic->new()->parse(input_elements => $lexical_output->{input_elements});
+    my $ast          = MarpaX::ESLIF::ECMA334::Syntactic->new()->parse($lexical_output);
 
 =cut
 
@@ -78,9 +78,9 @@ Parser method. C<%options> is hash containing:
 
 =over
 
-=item elements
+=item input
 
-Output from lexical parse is an array reference of all tokens, comments and pragmas
+Stripped input from lexical parse.
 
 =back
 
@@ -88,240 +88,26 @@ Output is an AST of the syntactic parse.
 
 =cut
 
-# --------------------------------------------------------------------------
-# Lexical AST returns a flat list of inputs, all have a "type", that can be:
-#
-#   Lexical Type                    Syntactic
-# - "identifier"                    Lexeme IDENTIFIER
-# - "keyword"                       Lexeme KEYWORD
-# - "integer literal"               Lexeme LITERAL
-# - "real literal"                  Lexeme LITERAL
-# - "character literal"             Lexeme LITERAL
-# - "string literal"                Lexeme LITERAL
-# - "operator or punctuator"        Standard input
-# - "comment"                       :discard
-# - "pragma text"                   :discard
-#
-# Note that there is a subtil confusion between lexical and syntactic grammars:
-#
-# Syntactic grammar defines <literal> as:
-# <literal>                                        ::= <boolean literal>            # Will be in <keyword>!
-#                                                    | <integer literal>
-#                                                    | <real literal>
-#                                                    | <character literal>
-#                                                    | <string literal>
-#                                                    | <null literal>               # Will be in <keyword>!
-#
-# but a <literal> per-se is NEVER reached by lexical grammar. Instead it contains <token> that is:
-#
-# <token>                                          ::= <identifier>
-#                                                    | <keyword>                    # Will contain 'true', 'false' and 'null'!
-#                                                    | <integer literal>
-#                                                    | <real literal>
-#                                                    | <character literal>
-#                                                    | <string literal>
-#                                                    | <operator or punctuator>
-#
-# Therefore a <token> exposed by the lexical grammar can have two significations in the syntactic grammar
-# when it is 'true', 'false' or 'null':
-# - a <boolean literal> or <null literal>, respectively
-# - a <keyword>
-#
-# What happens is:
-# - If the syntactic grammar expects a <literal> and current <token> is 'true', 'false' or 'null', corresponding literal is injected
-# - If the syntactic grammar expects a <keyword>, the later is injected regardless of its value
-# It is grammar itself that will select the one that corresponds to the correct lexeme depending on the context.
-#
-# --------------------------------------------------------------------------
-#
 sub parse {
     my ($self, %options) = @_;
 
+    my $input = $options{input} // croak 'Undefined input';
+    #
+    # Undefined input is an undefined output
+    #
+    return unless defined($input);
+
     $log->tracef("[%s] Start", $SYNTACTIC_GRAMMAR->currentDescription);
     #
-    # Create recognizer
+    # Create recognizer interface
     #
-    my $eslifRecognizerInterface = MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface->new(%options);
+    my $eslifRecognizerInterface = MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface->new(input => $input);
     #
-    # If it totally empty: no op
+    # Create valuation interface
     #
-    my $value;
-    if (! defined($eslifRecognizerInterface->nextElement)) {
-        $value = undef;
-    } else {
-        my $eslifRecognizer = MarpaX::ESLIF::Recognizer->new($SYNTACTIC_GRAMMAR, $eslifRecognizerInterface);
-        #
-        # Start the scan
-        #
-        $self->_scan($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager);
-        #
-        # Resume until we are done
-        #
-        while (! $eslifRecognizerInterface->isEof) {
-            if (! $self->_resume($eslifRecognizerInterface, $eslifRecognizer, \&_SyntacticEventManager)) {
-                croak "Resume failed";
-            }
-        }
+    my $eslifValueInterface = MarpaX::ESLIF::ECMA334::Syntactic::ValueInterface->new();
 
-        # -----------------------------------------------------------------------------------------
-        # Call for valuation (we configured value interface to not accept ambiguity nor null parse)
-        # -----------------------------------------------------------------------------------------
-        my $eslifValueInterface = MarpaX::ESLIF::ECMA334::Syntactic::ValueInterface->new();
-
-        croak "Valuation failure" unless MarpaX::ESLIF::Value->new($eslifRecognizer, $eslifValueInterface)->value();
-
-        $value = $eslifValueInterface->getResult;
-    }
-
-    $log->tracef("[%s] End", $SYNTACTIC_GRAMMAR->currentDescription);
-    return $value
-}
-
-# ============================================================================
-# _scan
-# ============================================================================
-sub _scan {
-    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $eventManager) = @_;
-
-    $log->tracef("[%s] Scan", $SYNTACTIC_GRAMMAR->currentDescription);
-    $eslifRecognizer->scan(1) || croak 'Initial scan failed';
-    #
-    # Scan can generate events
-    #
-    while ($self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)) {
-    }
-}
-
-# ============================================================================
-# _resume
-# ============================================================================
-sub _resume {
-    my ($self, $eslifRecognizerInterface, $eslifRecognizer, $eventManager) = @_;
-
-    $log->tracef("[%s] Resume", $SYNTACTIC_GRAMMAR->currentDescription);
-    my $rc = $eslifRecognizer->resume;
-    if ($rc) {
-        #
-        # Resume can generate events, even in case of failure
-        #
-        while ($self->$eventManager($eslifRecognizer, $eslifRecognizerInterface)) {
-        }
-    }
-
-    return $rc
-}
-
-# ============================================================================
-# _SyntacticEventManager
-# ============================================================================
-#
-# The event manager must always return a true value if it has performed a lexeme complete
-#
-sub _SyntacticEventManager {
-    my ($self, $eslifRecognizer, $eslifRecognizerInterface) = @_;
-
-    my $rc = 0;
-    my @events = grep { defined } map { $_->{event} } @{$eslifRecognizer->events};
-
-    my $currentElement = $eslifRecognizerInterface->currentElement;
-    my @alternatives;
-    my $latm = -1;
-
-    $log->tracef("[%s] Events: %s, currentElement name is %s", $SYNTACTIC_GRAMMAR->currentDescription, \@events, defined($currentElement) ? $currentElement->{name} : 'undef');
-    foreach my $event (@events) {
-        my ($match, $name, $value, $length) = (undef, undef, undef, undef, undef);
-
-        if ($event eq '^identifier') {
-            if (defined($currentElement) && $currentElement->{name} eq 'identifier') {
-                $match = $currentElement->{match};
-                $value = $currentElement->{value};
-                $name = 'IDENTIFIER';
-                $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
-            }
-        }
-        elsif ($event eq '^identifier_equal_to_assembly_or_module') {
-            if (defined($currentElement) && $currentElement->{name} eq 'identifier' && ($currentElement->{value} eq 'assembly' || $currentElement->{value} eq 'module')) {
-                $match = $currentElement->{match};
-                $value = $currentElement->{value};
-                $name = 'IDENTIFIER EQUAL TO ASSEMBLY OR MODULE';
-                $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
-            }
-        }
-        elsif ($event eq '^identifier_not_equal_to_assembly_or_module') {
-            if (defined($currentElement) && $currentElement->{name} eq 'identifier' && ($currentElement->{value} ne 'assembly' && $currentElement->{value} ne 'module')) {
-                $match = $currentElement->{match};
-                $value = $currentElement->{value};
-                $name = 'IDENTIFIER NOT EQUAL TO ASSEMBLY OR MODULE';
-                $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
-            }
-        }
-        elsif ($event eq '^literal') {
-            if (defined($currentElement) && $currentElement->{name} =~ /\bliteral$/) {
-                $match = $currentElement->{match};
-                $value = $currentElement->{value};
-                $name = 'LITERAL';
-                $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
-            }
-            elsif (defined($currentElement) && $currentElement->{name} eq 'keyword') {
-                $value = $currentElement->{value};
-                #
-                # Lexical grammar exposes 'true, 'false' and 'null' as a keyword.
-                #
-                if ($value eq 'true' || $value eq 'false' || $value eq 'null') {
-                    $name = 'LITERAL';
-                    $match = $currentElement->{match};
-                    $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
-                }
-            }
-        }
-        elsif ($event eq '^keyword') {
-            if (defined($currentElement) && $currentElement->{name} eq 'keyword') {
-                $match = $currentElement->{match};
-                $value = $currentElement->{value};
-                $name = 'KEYWORD';
-                $currentElement = $eslifRecognizerInterface->consumeCurrentElement;
-            }
-        }
-        elsif ($event eq 'comment$') {
-            my $comment = $eslifRecognizer->discardLast();
-            $log->tracef("[%s] Comment: %s", $SYNTACTIC_GRAMMAR->currentDescription, $comment);
-        }
-        elsif ($event eq 'pragma_text$') {
-            my $pragma = $eslifRecognizer->discardLast();
-            $log->tracef("[%s] Pragma with text: %s", $SYNTACTIC_GRAMMAR->currentDescription, $pragma);
-        }
-        else {
-            croak "Unsupported event $event"
-        }
-
-	if (defined($match)) {
-            my $length = bytes::length($match);
-            if ($length >= $latm) {
-                if ($length > $latm) {
-                    @alternatives = ();
-                    $latm = $length;
-                }
-                push(@alternatives, { match => $match, name => $name, value => $value })
-            }
-        }
-    }
-
-    if ($latm >= 0) {
-        map {
-            $log->tracef("[%s] Alternative: <%s> = %s", $SYNTACTIC_GRAMMAR->currentDescription, $_->{name}, $_->{value});
-            croak "Alternative failure" . $_->{name} unless $eslifRecognizer->lexemeAlternative($_->{name}, $_->{value})
-        } @alternatives;
-        $log->tracef("[%s] Lexeme complete on %d bytes", $SYNTACTIC_GRAMMAR->currentDescription, $latm);
-        croak "Lexeme complete failure" unless $eslifRecognizer->lexemeComplete($latm);
-        $rc = 1
-    } else {
-        #
-        # No alternative but there was an element ?
-        #
-        $log->tracef("[%s] No alternative injected", $SYNTACTIC_GRAMMAR->currentDescription);
-    }
-
-    return $rc;
+    return $SYNTACTIC_GRAMMAR->parse($eslifRecognizerInterface, $eslifValueInterface) // croak 'Valuation failure'
 }
 
 =head1 NOTES
@@ -1290,7 +1076,16 @@ __[ syntactic grammar ]__
 # --------------------------------------
 event ^identifier = predicted <identifier>
 <identifier>                               ::= <IDENTIFIER>
-<IDENTIFIER>                                 ~ [^\s\S] # Matches nothing
+#
+# Lexical grammar says:
+#
+# <identifier> ::= <available identifier> | '@' <identifier or keyword>
+# <available identifier>                           ::= <AN IDENTIFIER OR KEYWORD THAT IS NOT A KEYWORD>
+# <identifier or keyword>                          ::= <IDENTIFIER OR KEYWORD>
+#
+# So finally this is equivalent to <IDENTIFIER OR KEYWORD>
+
+<IDENTIFIER>                                 ~ <_identifier or keyword>
 event ^literal = predicted <literal>
 <literal>                                  ::= <LITERAL>
 <LITERAL>                                    ~ [^\s\S] # Matches nothing
@@ -1302,7 +1097,92 @@ event ^identifier_equal_to_assembly_or_module = predicted <identifier equal to a
 <IDENTIFIER NOT EQUAL TO ASSEMBLY OR MODULE> ~ [^\s\S] # Matches nothing
 event ^keyword = predicted <keyword>
 <keyword>                                  ::= <KEYWORD>
-<KEYWORD>                                    ~ [^\s\S] # Matches nothing
+
+# -------
+# KEYWORD
+# -------
+<KEYWORD> ::= 'abstract'
+            | 'byte'
+            | 'class'
+            | 'delegate'
+            | 'event'
+            | 'fixed'
+            | 'if'
+            | 'internal'
+            | 'new'
+            | 'override'
+            | 'readonly'
+            | 'short'
+            | 'struct'
+            | 'try'
+            | 'unsafe'
+            | 'volatile'
+            | 'as'
+            | 'case'
+            | 'const'
+            | 'do'
+            | 'explicit'
+            | 'float'
+            | 'implicit'
+            | 'is'
+            | 'null'
+            | 'params'
+            | 'ref'
+            | 'sizeof'
+            | 'switch'
+            | 'typeof'
+            | 'ushort'
+            | 'while'
+            | 'base'
+            | 'catch'
+            | 'continue'
+            | 'double'
+            | 'extern'
+            | 'for'
+            | 'in'
+            | 'lock'
+            | 'object'
+            | 'private'
+            | 'return'
+            | 'stackalloc'
+            | 'this'
+            | 'uint'
+            | 'using'
+            | 'bool'
+            | 'char'
+            | 'decimal'
+            | 'else'
+            | 'false'
+            | 'foreach'
+            | 'int'
+            | 'long'
+            | 'operator'
+            | 'protected'
+            | 'sbyte'
+            | 'static'
+            | 'throw'
+            | 'ulong'
+            | 'virtual'
+            | 'break'
+            | 'checked'
+            | 'default'
+            | 'enum'
+            | 'finally'
+            | 'goto'
+            | 'interface'
+            | 'namespace'
+            | 'out'
+            | 'public'
+            | 'sealed'
+            | 'string'
+            | 'true'
+            | 'unchecked'
+            | 'void'
+
+# ---------------------------------------------------------------------------------
+# IDENTIFIER OR KEYWORD (where unicode escape sequences have already been resolved)
+# ---------------------------------------------------------------------------------
+<_identifier or keyword>                       :[2]:= /[\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}_][\p{Lu}\p{Ll}\p{Lt}\p{Lm}\p{Lo}\p{Nl}\p{Mn}\p{Mc}\p{Nd}\p{Pc}\p{Cf}]*/u
 
 # -------
 # Comment

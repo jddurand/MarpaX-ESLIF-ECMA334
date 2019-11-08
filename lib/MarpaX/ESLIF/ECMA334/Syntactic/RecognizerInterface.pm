@@ -2,6 +2,7 @@ use strict;
 use warnings FATAL => 'all';
 
 package MarpaX::ESLIF::ECMA334::Syntactic::RecognizerInterface;
+use Carp qw/croak/;
 use Log::Any qw/$log/;
 
 # ABSTRACT: MarpaX::ESLIF::ECMA334 Syntactic Recognizer Interface
@@ -39,11 +40,8 @@ Instantiate a new recognizer interface object.
 sub new {
     my ($pkg, %options) = @_;
 
-    my $elements = delete($options{elements}) // [];
-
     return bless {
-        elements => $elements,
-        currentElement => undef
+        input => $options{input} // croak 'Undefined input'
     }, $pkg
 }
 
@@ -61,13 +59,7 @@ Returns a true or a false value, indicating if last read was successful.
 
 =cut
 
-sub read {
-    my ($self) = @_;
-
-    my $rc = scalar(@{$self->{elements}}) > 0 ? 1 : 0;
-    $log->tracef('%s::read: return %d', __PACKAGE__, $rc);
-    return $rc;
-}
+sub read { return 1 }
 
 # ============================================================================
 # isEof
@@ -79,13 +71,7 @@ Returns a true or a false value, indicating if end-of-data is reached.
 
 =cut
 
-sub isEof {
-    my ($self) = @_;
-
-    my $rc = scalar(@{$self->{elements}}) > 0 ? 0 : 1;
-    $log->tracef('%s::isEof: return %d', __PACKAGE__, $rc);
-    return $rc
-}
+sub isEof { return 1 }
 
 # ============================================================================
 # isCharacterStream
@@ -128,11 +114,7 @@ Returns last bunch of data. Depends on the next value from lexical AST.
 sub data {
     my ($self) = @_;
 
-    $self->{currentElement} = shift @{$self->{elements}};
-    my $rc = $self->{currentElement}->{value};
-
-    $log->tracef('%s::data: return %s', __PACKAGE__, defined($rc) ? "\"$rc\"" : 'undef');
-    return $rc
+    return $self->{input}
 }
 
 # ============================================================================
@@ -189,70 +171,6 @@ Returns a true or a false value, indicating if absolute position tracking is on 
 
 sub isWithTrack {
     return 0
-}
-
-# ============================================================================
-# currentElement
-# ============================================================================
-
-=head3 currentElement($self)
-
-Returns the current structured item from lexical AST.
-
-=cut
-
-sub currentElement {
-    my ($self) = @_;
-
-    return $self->{currentElement}
-}
-
-# ============================================================================
-# consumeCurrentElement
-# ============================================================================
-
-=head3 consumeCurrentElement($self)
-
-Consumes the current structured item from lexical AST.
-
-=cut
-
-sub consumeCurrentElement {
-    my ($self) = @_;
-
-    return $self->{currentElement} = undef
-}
-
-# ============================================================================
-# nextElement
-# ============================================================================
-
-=head3 nextElement($self)
-
-Returns the next structured item from lexical AST.
-
-=cut
-
-sub nextElement {
-    my ($self) = @_;
-
-    return @{$self->{elements}} ? $self->{elements}->[0] : undef
-}
-
-# ============================================================================
-# consumeNextElement
-# ============================================================================
-
-=head3 consumeNextElement($self)
-
-Consumes the next structured item from lexical AST.
-
-=cut
-
-sub consumeNextElement {
-    my ($self) = @_;
-
-    shift @{$self->{_elements}}
 }
 
 1;
