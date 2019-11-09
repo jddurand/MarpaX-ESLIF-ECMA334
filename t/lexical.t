@@ -29,7 +29,7 @@ log4perl.appender.Screen.layout.ConversionPattern = %d %-5p %6P %m{chomp}%n
         ';
     Log::Log4perl::init(\$defaultLog4perlConf);
     Log::Any::Adapter->set('Log4perl');
-    require_ok('MarpaX::ESLIF::ECMA334')
+    require_ok('MarpaX::ESLIF::ECMA334::Lexical')
 };
 
 my $lexicalParser = MarpaX::ESLIF::ECMA334::Lexical->new;
